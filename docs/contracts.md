@@ -169,6 +169,8 @@ one level → `null` (label alone).
   active: null | { ref, kind, src, currentTime, paused, ended, playbackRate, defaultPlaybackRate, preservesPitch },
   candidates: [ { ref, kind, src, ambient, lastPlayAt, via } ],   // via: 'light' | 'shadow' | 'detached'
   atEnd: false, gateHeld: false,      // for a remote active element: from its snapshot
+  endMargin: { default: 0.1, learned: 0, effective: 0.1 },  // stop-at-end margin, media s (DESIGN §6.13);
+                                      // this frame's values; effective is null without a local active element
   frames: { connected: true, frames: [3, 4] },   // top: port up + child frame ids heard from
   model: { ... },                     // the last model passed to view.update (§3.1)
   counters: { reapplies: 0, siteRateWrites: 0, seeksIssued: 0, contested: 0 },

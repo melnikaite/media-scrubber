@@ -255,29 +255,66 @@
   }
 
   // ---- stop at end ----
-  function watchEps(entry, el) {
+  // End margin (§6.13): max(default, learned) media seconds × max(1, rate), capped at 15 % of the
+  // clip. `learned` is per document, in memory only: raised when the site pre-empts our stop.
+  let learned = 0;
+  function clipCap(el) {
+    const d = el.duration;
+    return MS.finite(d) && d > 0 ? Math.min(C.END_LEARN_CAP_S, C.END_CAP_FRAC * d) : C.END_LEARN_CAP_S;
+  }
+  function defaultMargin(entry, el) {
     const base = entry.kind === 'video' ? 1.5 * frameDuration(el) : C.AUDIO_END_WATCH;
-    return base * Math.max(1, el.playbackRate || 1);   // never below the 1x margin: slow rates must still beat a site's own early end check
+    return Math.max(C.END_MARGIN_S, base);
+  }
+  function watchEps(entry, el) {
+    // Never below the 1x margin: slow rates must still beat a site's own early end check.
+    const m = Math.max(defaultMargin(entry, el), learned) * Math.max(1, el.playbackRate || 1);
+    const d = el.duration;
+    return MS.finite(d) && d > 0 ? Math.min(m, C.END_CAP_FRAC * d) : m;
   }
   function nearEnd(entry, el, slack) {
     const d = el.duration;
     if (!MS.finite(d) || d <= 0) return false;
     return el.ended || el.currentTime >= d - watchEps(entry, el) - (slack || 0);
   }
+  // `quiet`: we paused this element ourselves (stop at end, or the user's pause) or it is already
+  // stopped at its end; nothing that happens to it counts as a pre-emption until it plays again.
+  function onPlay(entry) { const el = entry.el(); if (el) memo(el).quiet = false; }
+  function ownPause(el) { memo(el).quiet = true; el.pause(); }
+  // The site acted on the still-playing active element before our stop: learn how early.
+  function preempted(entry, el) {
+    if (!el || !MS.state.open || el.ended || MS.state.passRef === entry.ref) return;
+    const m = memo(el);
+    if (m.quiet || MS.state.atEndRef === entry.ref) return;
+    const d = el.duration;
+    if (!MS.finite(d) || d <= 0) return;
+    const r = d - el.currentTime;
+    const cap = clipCap(el);
+    // Only a stop we could have beaten: later than our margin, within the cap (a mid-clip pause
+    // from the site's own UI is not an end detection).
+    if (!(r > watchEps(entry, el)) || r > cap) return;
+    m.quiet = true;
+    const extra = entry.kind === 'video' ? 2 * frameDuration(el) : C.END_LEARN_EXTRA_S;
+    learned = Math.min(Math.max(learned, r + extra), cap);
+  }
   function arm(entry, el) {
     const wasArmed = MS.state.prearmRef === entry.ref;
+    memo(el).quiet = true;
     MS.state.atEndRef = entry.ref;
     MS.state.prearmRef = entry.ref;
     if (wasArmed) return;
     MS.emitNode(MS.EV.gateArm, el);
   }
-  // Pre-arm: the gate is armed once < PREARM_S of wall-clock time remains, so a site's own early
-  // end detection cannot start the next clip before our end watch fires.
-  const PREARM_S = 0.5;
+  // Pre-arm: the gate is armed once < prearmWindow of wall-clock time remains, so a site's own
+  // early end detection cannot start the next clip before our end watch fires.
+  const PREARM_S = 1.0;
   function remainingWall(el) {
     const d = el.duration;
     if (!MS.finite(d) || d <= 0) return Infinity;
     return (d - el.currentTime) / (el.playbackRate || 1);
+  }
+  function prearmWindow(entry, el) {
+    return Math.max(PREARM_S, watchEps(entry, el) / (el.playbackRate || 1) + 0.3);
   }
   function prearm(entry, el) {
     if (MS.state.prearmRef === entry.ref) return;
@@ -289,15 +326,24 @@
     const el = entry && entry.el();
     if (!el || el.paused || el.ended || !MS.state.open) return;
     if (MS.state.passRef === entry.ref) return;          // one-shot pass-through (continue at end)
-    if (nearEnd(entry, el)) { el.pause(); arm(entry, el); MS.core.render(); return; }
-    if (remainingWall(el) < PREARM_S) prearm(entry, el);
+    if (nearEnd(entry, el)) { ownPause(el); arm(entry, el); MS.core.render(); return; }
+    if (remainingWall(el) < prearmWindow(entry, el)) prearm(entry, el);
     else if (MS.state.prearmRef === entry.ref) MS.core.disarm();   // sought back
   }
   // Active element paused/ended on its own near its end, or inside the pre-armed window.
   function onPausedOrEnded(entry) {
     const el = entry.el();
     if (!el || MS.state.passRef === entry.ref) return;
+    preempted(entry, el);          // a pause we did not cause, earlier than our margin
     if (MS.state.prearmRef === entry.ref || nearEnd(entry, el, 0.05)) arm(entry, el);
+  }
+  function endMarginDebug(entry) {
+    const el = entry && entry.local && entry.el();
+    return {
+      default: el ? defaultMargin(entry, el) : C.END_MARGIN_S,
+      learned,
+      effective: el ? watchEps(entry, el) : null,
+    };
   }
 
   function reset() {
@@ -310,6 +356,6 @@
     range, clamp, logical, seekTo, onSeeked, onReset, frameDuration,
     watchFrames, unwatchFrames,
     stepPress, stepRelease, wheelStep, labels, execStep,
-    endCheck, onPausedOrEnded, reset,
+    endCheck, onPausedOrEnded, onPlay, ownPause, preempted, endMarginDebug, reset,
   };
 })();

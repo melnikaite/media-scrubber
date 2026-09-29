@@ -474,8 +474,8 @@ async def t_ladder_cap(env):
     await page.close()
 
 
-async def _reels_open(env, rate_chip=None):
-    page = await goto(env, "/pages/reels.html")
+async def _reels_open(env, rate_chip=None, path="/pages/reels.html"):
+    page = await goto(env, path)
     await page.wait_for_function("() => __t.clipsStarted.length >= 1", timeout=8000)
     await env.open(page)
     await env.active(page, lambda a: not a["paused"], msg="playing reel active")
@@ -768,6 +768,78 @@ async def t_reels_pauseadvance(env):
     raise Info(f"{len(info)} clip(s) observed")
 
 
+async def _reels_adaptive(env, rate):
+    """Adaptive end margin (DESIGN §6.13): the page ends every clip itself 0.25 s before its end.
+
+    The first clip may be pre-empted (recorded); the extension learns how early the site acts,
+    and every following clip stops paused at its end before the page acts.
+    """
+    page = await _reels_open(env, None if rate == 1.0 else str(rate), path="/pages/reels.html?earlyms=250")
+    if rate != 1.0:
+        await env.active(page, lambda a: a["playbackRate"] == rate, 2, msg=f"{rate} on the first reel")
+    out = []
+    # First clip: stop or pre-emption.
+    idx = await js(page, "() => __t.index()")
+    adv0 = await js(page, "() => __t.advances.length")
+    dur = await js(page, "() => { window.__endEl = __t.current(); return __endEl.duration; }")
+
+    async def stopped_or_moved():
+        d = await env.debug(page)
+        moved = await js(page, f"() => __t.advances.length > {adv0}")
+        return d if d.get("atEnd") or moved else None
+    await wait_until(stopped_or_moved, dur / rate + 4, msg="first clip: stop or site advance")
+    await page.wait_for_timeout(400)
+    d = await env.debug(page)
+    st = await js(page, f"""() => ({{ adv: __t.advances.slice({adv0}).map(a => a.via), i: __t.index(),
+        left: +(__endEl.duration - __endEl.currentTime).toFixed(3), nextPlaying: __t.index() !== {idx} && !__t.current().paused }})""")
+    first = {"first": True, "gateHeld": d.get("gateHeld"), "endMargin": d.get("endMargin"), **st}
+    out.append(first)
+    if not st["nextPlaying"]:
+        await page.keyboard.press("Space")
+    await wait_until(lambda: js(page, f"() => __t.index() === {idx + 1} && !__t.current().paused"), 3,
+                     msg="after the first clip the next one plays")
+    await page.wait_for_timeout(300)
+    r = await js(page, "() => __t.current().playbackRate")
+    check(r == rate, f"clip after the first plays at {r}, want {rate}")
+    # Following clips: must stop before the page acts.
+    for k in range(3):
+        idx = await js(page, "() => __t.index()")
+        clip = await js(page, "() => __t.current().dataset.clip")
+        adv0 = await js(page, "() => __t.advances.length")
+        dur = await js(page, "() => { window.__endEl = __t.current(); return __endEl.duration; }")
+        await wait_until(stopped_or_moved, dur / rate + 4, msg=f"atEnd on {clip}")
+        await page.wait_for_timeout(750)
+        d = await env.debug(page)
+        st = await js(page, f"""() => {{ const v = window.__endEl;
+            return {{i: __t.index(), adv: __t.advances.slice({adv0}).map(a => a.via), paused: v.paused,
+                     left: +(v.duration - v.currentTime).toFixed(3), connected: v.isConnected}}; }}""")
+        em = d.get("endMargin") or {}
+        rec = {"clip": clip, "gateHeld": d.get("gateHeld"), "learned": round(em.get("learned") or 0, 3),
+               "effective": round(em.get("effective") or 0, 3), **st}
+        out.append(rec)
+        check(st["adv"] == [] and st["i"] == idx and st["connected"], f"{clip}: page acted before our stop ({rec})")
+        check(st["paused"] and d.get("atEnd"), f"{clip}: not stopped at end ({rec})")
+        check(0.25 < st["left"] < 0.5, f"{clip}: stop point {st['left']} s before the end ({rec})")
+        check(0.25 <= rec["learned"] <= 0.35, f"learned margin {rec['learned']} not in 0.25..0.35 ({rec})")
+        await page.keyboard.press("Space")
+        await wait_until(lambda: js(page, f"() => __t.index() === {idx + 1} && !__t.current().paused"), 3,
+                         msg=f"Space → the site advances after {clip}")
+        await page.wait_for_timeout(300)
+        r = await js(page, "() => __t.current().playbackRate")
+        check(r == rate, f"next clip after {clip} plays at {r}, want {rate}")
+    for x in out:
+        env.note(x)
+    await page.close()
+
+
+async def t_reels_adaptive(env):
+    await _reels_adaptive(env, 1.0)
+
+
+async def t_reels_adaptive_slow(env):
+    await _reels_adaptive(env, 0.5)
+
+
 async def t_live(env):
     page = await goto(env, "/pages/live.html")
     await page.wait_for_function("() => __t.live.stage === 'ready' && __t.media.main.readyState >= 2", timeout=8000)
@@ -989,7 +1061,7 @@ async def _readout(env, page, want):
 
 TESTS = [
     ("all_pages", t_all_pages), ("single", t_single), ("ladder_cap", t_ladder_cap), ("reels", t_reels),
-    ("reels_stop_at_end", t_reels_stop_at_end), ("reels_pauseadvance", t_reels_pauseadvance), ("recycle", t_recycle), ("shadow", t_shadow), ("audio", t_audio),
+    ("reels_stop_at_end", t_reels_stop_at_end), ("reels_pauseadvance", t_reels_pauseadvance), ("reels_adaptive", t_reels_adaptive), ("reels_adaptive_slow", t_reels_adaptive_slow), ("recycle", t_recycle), ("shadow", t_shadow), ("audio", t_audio),
     ("spa", t_spa), ("fullscreen_container", t_fullscreen_container), ("fullscreen_video", t_fullscreen_video), ("live", t_live), ("hostile", t_hostile), ("ambient", t_ambient),
     ("iframe", t_iframe), ("iframe_extra", t_iframe_extra), ("nomedia", t_nomedia),
 ]

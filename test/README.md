@@ -74,3 +74,11 @@ All pages load `common.js` (no inline scripts, DOM via `createElement`). Common 
 | `ambient.html` | muted looping autoplay background video (`ambient`, 2 s, no controls) + a normal player (`main`, 5 s, controls, not autoplaying) | — |
 | `iframe.html` | same-origin child `#same` and cross-origin child `#cross` (`localhost` ↔ `127.0.0.1`, same port) → `iframe-child.html` | child: `origin`, own key loggers, `media.main` |
 | `nomedia.html` | text only; `#add` appends and plays a video later | — |
+
+### Adaptive stop-at-end
+
+`reels.html?earlyms=N` makes the page end each clip by itself N ms before its
+end (checked on `timeupdate` and rAF), modelling sites whose own end detection
+fires earlier than our default 0.1 s margin. `reels_adaptive` (1×) and
+`reels_adaptive_slow` (0.5×) assert that after the first pre-empted clip the
+learned margin (`ms:debug` → `endMargin`) makes every following clip stop first.

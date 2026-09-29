@@ -10,6 +10,10 @@
   const CLIPS = ['clip-5s.webm', 'clip-3s.webm', 'clip-2s.webm'];
   const EARLY = 'clip-3s.webm';
   const PAUSE_ADVANCE = new URLSearchParams(location.search).has('pauseadvance');
+  // Opt-in (?earlyms=N): EVERY clip ends by the page's own detection once less than N ms of media
+  // remain (checked on timeupdate and on the page rAF): pause + advance('early-ms'). Models a
+  // site that acts earlier than the extension's default stop margin (DESIGN §6.13, learning).
+  const EARLY_MS = Number(new URLSearchParams(location.search).get('earlyms')) || 0;
   const stage = document.getElementById('stage');
   stage.style.cssText = 'position:relative;width:640px;height:360px;';
   t.siteRateWrites = 0;
@@ -61,6 +65,8 @@
   }
 
   function earlyCheck(v) {
+    if (EARLY_MS > 0 && Number(v.dataset.i) === index && !v.paused && isFinite(v.duration) &&
+        v.duration - v.currentTime < EARLY_MS / 1000) { v.pause(); advance('early-ms'); return; }
     if (v.dataset.clip !== EARLY || v.paused || !isFinite(v.duration)) return;
     if (v.currentTime >= v.duration - 0.05) { v.pause(); advance('early'); }   // the queued pause event sees index already moved on
   }

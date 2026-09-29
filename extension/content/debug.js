@@ -30,6 +30,7 @@
         }) : [],
         atEnd: !!(active && (active.local ? (st.atEndRef === active.ref || (st.gateHeld && el && el.paused)) : (active.snap && active.snap.atEnd))),
         gateHeld: active && !active.local ? !!(active.snap && active.snap.gateHeld) : st.gateHeld,
+        endMargin: MS.seeker.endMarginDebug(active),
         frames: MS.frames.debug(),
         counters: { ...st.counters },
         model: st.open ? st.lastModel : null,

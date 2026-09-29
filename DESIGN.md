@@ -581,15 +581,29 @@ Always on while the bar is open (§0): the active clip ends paused on its last
 frame, and the site does not move on by itself.
 
 - **End watch:** while the active element plays, the readout rAF loop (§6.6)
-  already reads `currentTime`; when `currentTime ≥ duration − ε_end`
-  (ε_end = 1.5 frames, or 0.08 s for audio, multiplied by `max(1, rate)` — never
-  shrunk at slow rates, or a site's own early end check wins), call
-  `pause()`. This fires before the site's own end detection (playphrase pauses
-  and advances *before* `ended`, §1) and before `ended`, so neither path runs.
-  The rAF loop does not run in background tabs, so a `timeupdate` check is the
-  backstop there (coarser; accepted).
+  already reads `currentTime`; when `currentTime ≥ duration − ε_end`, call
+  `pause()`. ε_end = max(default, learned) × `max(1, rate)` media seconds —
+  never shrunk at slow rates, or a site's own early end check wins — and never
+  more than 15 % of the clip's duration. default = max(0.1 s, 1.5 frames) for
+  video, max(0.1 s, 0.08 s) for audio. This fires before the site's own end
+  detection (playphrase pauses and advances *before* `ended`, §1) and before
+  `ended`, so neither path runs. The rAF loop does not run in background tabs,
+  so a `timeupdate` check is the backstop there (coarser; accepted).
+- **Learned margin (per document, in memory only, per frame):** a site whose
+  own end detection acts earlier than our margin *pre-empts* the stop. It is
+  detected on the active element while it still plays and we have not paused it
+  (neither our stop nor the user's pause through us; nothing after our stop
+  counts, so a site reacting to our pause — `?pauseadvance` — never ratchets):
+  the MAIN gate reports `gate-held` for another element, another non-ambient
+  element fires `play`, or the site pauses it. With R = `duration − currentTime`
+  at that moment, if ε_end < R ≤ cap (cap = min(1 s, 0.15 × duration); a larger
+  R is a mid-clip pause from the site's UI, not an end check), then
+  learned = min(max(learned, R + 2 frames (audio 0.05 s)), cap). The first clip
+  on such a site may be lost this way; the following ones stop in time. The
+  values are in `ms:debug` `endMargin` (docs/contracts.md §5).
 - **Play gate (MAIN agent):** **pre-armed** while the active element plays with
-  less than 0.5 s of wall-clock time left (`(duration − t) / rate`), so the
+  less than max(1 s, ε_end / rate + 0.3 s) of wall-clock time left
+  (`(duration − t) / rate`), so the
   site's own early end detection cannot slip a `play()` out before our end
   watch fires; a site pause of the active element inside that window counts as
   the stop. Stays armed at the end until the user plays again; seeking back out

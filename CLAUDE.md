@@ -68,6 +68,13 @@ anything; it names the source of truth and the invariants every change must keep
 - **`el.ended` can be `true` before `currentTime` reaches `duration`** when one
   track (e.g. Opus audio with pre-skip) ends earlier — even with no `ended`
   event, after our own pause. `play()` on it restarts from 0.
+- **A site's own end detection can act well before `ended`** (playphrase
+  switches clips earlier than a 1.5-frame margin). No fixed stop margin fits
+  every site: the end watch stops 0.1 s early by default and learns per
+  document from pre-emptions (a held play, another element starting, a site
+  pause of the still-playing active element). Never learn from anything after
+  our own pause — a site that advances *because* we paused would ratchet the
+  margin up forever.
 - Content scripts are orphaned when the extension reloads/updates:
   `chrome.runtime.id` becomes undefined. Detect it, tear the bar down, release
   the MAIN-world lock.

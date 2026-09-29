@@ -15,6 +15,10 @@
     COMMON_FPS: Object.freeze([23.976, 24, 25, 29.97, 30, 50, 59.94, 60]),
     AUDIO_END_EPS: 0.05,      // seek end clamp for audio (§6.5)
     AUDIO_END_WATCH: 0.08,    // stop-at-end threshold for audio (§6.13)
+    END_MARGIN_S: 0.1,        // default stop-at-end margin, media seconds (§6.13)
+    END_LEARN_CAP_S: 1.0,     // learned margin never above this ...
+    END_CAP_FRAC: 0.15,       // ... nor above this fraction of the clip's duration
+    END_LEARN_EXTRA_S: 0.05,  // added to a measured pre-emption (audio; video: 2 frames)
     REMOVE_GRACE_MS: 1000,
     BUDGET_MAX: 5, BUDGET_WINDOW_MS: 2000, BUDGET_BACKOFF_MS: 5000,
   });

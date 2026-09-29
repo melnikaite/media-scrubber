@@ -147,6 +147,9 @@
   R.onMedia = (type, e) => {
     switch (type) {
       case 'play':
+        // Another element starts while the active one had not been stopped: pre-emption (§6.13).
+        if (e !== active && !e.ambient() && active && active.local) S.preempted(active, active.el());
+        if (e.local) S.onPlay(e);
         if (st.passRef === e.ref && st.passEnded) st.passRef = null;
         if (!e.ambient()) {
           if (st.atEndRef || st.gateHeld || st.prearmRef) disarm();
@@ -206,6 +209,8 @@
     const n = ev.relatedTarget;
     let e = null;
     if (MS.isMedia(n)) e = R.register(n);
+    // The site tried to start another element before our stop: pre-emption (§6.13).
+    if (active && active.local && e !== active) S.preempted(active, active.el());
     st.gateHeld = true;
     st.heldRef = e ? e.ref : null;
     render();
@@ -243,7 +248,7 @@
           el.play().catch(() => {});
         }
       } else if (!el.paused && !el.ended) {
-        el.pause();                            // pause exactly now
+        S.ownPause(el);                        // pause exactly now
       } else {
         disarm();
         el.play().catch(() => {});

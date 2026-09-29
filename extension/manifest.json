@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Media Scrubber",
+  "version": "0.1.0",
+  "description": "A precise full-width control bar for the audio and video on any site.",
+  "minimum_chrome_version": "120",
+  "permissions": [],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Media Scrubber",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "commands": {
+    "toggle-bar": {
+      "suggested_key": { "default": "Alt+Shift+M" },
+      "description": "Open or close the bar in this tab"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "world": "MAIN",
+      "js": ["main/agent.js"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true,
+      "js": [
+        "content/ns.js",
+        "content/intent.js",
+        "content/registry.js",
+        "content/reconcile.js",
+        "content/seeker.js",
+        "content/keys.js",
+        "content/ui/styles.js",
+        "content/ui/host.js",
+        "content/ui/bar.js",
+        "content/frames.js",
+        "content/debug.js",
+        "content/boot.js"
+      ]
+    }
+  ]
+}

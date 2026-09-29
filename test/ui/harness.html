@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="style-src 'self'; script-src 'self'; require-trusted-types-for 'script'">
+<title>media-scrubber UI harness (hostile page)</title>
+<link rel="stylesheet" href="hostile.css">
+</head>
+<body>
+<div id="stage">
+  <video id="vid" muted playsinline></video>
+  <div id="box2"></div>
+  <button id="fsContainer">container fullscreen</button>
+  <button id="fsVideo">video fullscreen</button>
+</div>
+<div id="filler">page text page text page text</div>
+<div id="overlay"></div>
+<script src="ns.js"></script>
+<script src="../../extension/content/ui/styles.js"></script>
+<script src="../../extension/content/ui/host.js"></script>
+<script src="../../extension/content/ui/bar.js"></script>
+<script src="fake.js"></script>
+</body>
+</html>

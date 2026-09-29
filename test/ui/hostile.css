@@ -1,0 +1,14 @@
+html { transform: translateZ(0); }
+* { all: unset !important; font: 40px serif !important; color: red !important; }
+html, body { display: block !important; min-height: 2000px !important; background: #3f6b4f !important; }
+#stage { display: block !important; position: relative !important; height: 520px !important; background: #3f6b4f !important; }
+#vid { display: block !important; position: absolute !important; left: 60px !important; top: 60px !important;
+       width: 430px !important; height: 242px !important; background: #6b4a3a !important; }
+#box2 { display: block !important; position: absolute !important; left: 560px !important; top: 60px !important;
+        width: 300px !important; height: 169px !important; background: #2c2420 !important; }
+#fsContainer, #fsVideo { display: block !important; position: absolute !important; top: 360px !important;
+        height: 50px !important; width: 300px !important; background: #ddd !important; font: 16px sans-serif !important; color: #000 !important; }
+#fsContainer { left: 60px !important; } #fsVideo { left: 400px !important; }
+#filler { display: block !important; }
+#overlay { display: block !important; position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+           height: 100px !important; z-index: 2147483647 !important; background: rgba(255,0,0,.25) !important; }

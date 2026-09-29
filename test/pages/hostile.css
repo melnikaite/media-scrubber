@@ -1,0 +1,7 @@
+html { transform: translateZ(0) !important; }
+* { all: unset !important; display: block !important; box-sizing: content-box !important; font: 16px serif !important; color: #111 !important; }
+head, script, style, link, title { display: none !important; }
+body { margin: 8px !important; background: #fff !important; }
+video { width: 640px !important; height: 360px !important; background: #000 !important; }
+#overlay { position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important; height: 60px !important;
+  z-index: 2147483647 !important; background: rgba(200, 0, 0, .5) !important; }

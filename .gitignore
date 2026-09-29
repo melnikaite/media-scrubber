@@ -1,0 +1,4 @@
+test/media/
+__pycache__/
+.DS_Store
+test/ui/shots/

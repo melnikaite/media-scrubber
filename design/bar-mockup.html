@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>media-scrubber — bar mockup (revision 3)</title>
+<style>
+  :root { --surface: rgba(28,30,34,.55); --surface-rest: rgba(28,30,34,.4); --hair: rgba(255,255,255,.10);
+          --text: #F4F5F7; --text2: rgba(244,245,247,.62); --accent: #5AA8FF; --warn: #F5B83D; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #e9e6df; color: #222; }
+  h1 { font-size: 18px; margin: 24px 24px 4px; }
+  p.lead { margin: 0 24px 16px; color: #555; max-width: 900px; }
+  .frame { position: relative; margin: 0 24px 26px; border-radius: 10px; overflow: hidden; background: #3f6b4f; }
+  .frame.light { background: #fafafa; }
+  .frame.dark { background: #111; }
+  .caption { position: absolute; top: 10px; left: 14px; font-weight: 600; color: rgba(255,255,255,.92); font-size: 12px; }
+  .frame.light .caption { color: #333; }
+  .page { height: 180px; display: flex; align-items: center; justify-content: center; }
+  .video { width: 320px; height: 140px; border-radius: 8px; position: relative;
+           background: linear-gradient(135deg,#6b4a3a,#2c2420 60%,#8a6a4c); }
+  .video.outlined { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .video .label { position: absolute; left: 0; top: -26px; background: var(--accent); color: #07121f; font-weight: 600;
+                  font-size: 11px; padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; color: var(--text);
+         background: var(--surface); backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1);
+         border-top: 1px solid var(--hair); font-variant-numeric: tabular-nums; }
+  .bar.floating { bottom: 64px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .bar.rest { background: var(--surface-rest); }
+  .bar.rest .row > :not(.readout) { opacity: .6; }
+  .rail { position: relative; height: 20px; cursor: pointer; }
+  .track, .buf, .played { position: absolute; left: 0; top: 9px; height: 3px; }
+  .track { right: 0; background: rgba(255,255,255,.22); }
+  .buf { background: rgba(255,255,255,.35); }
+  .played { background: var(--accent); }
+  .scrub .track, .scrub .buf, .scrub .played { top: 7px; height: 6px; }
+  .ticks { position: absolute; left: 0; right: 0; top: 0; height: 4px; pointer-events: none;
+           background-image: repeating-linear-gradient(to right, rgba(255,255,255,.25) 0 1px, transparent 1px 4%); }
+  .head { position: absolute; top: 0; width: 2px; height: 20px; background: var(--accent); }
+  .knob { position: absolute; top: 4px; width: 12px; height: 12px; margin-left: -5px; border-radius: 50%; background: #fff;
+          box-shadow: 0 0 0 3px rgba(90,168,255,.4); }
+  .tip { position: absolute; bottom: 58px; transform: translateX(-50%); background: rgba(20,21,24,.9); color: var(--accent);
+         padding: 3px 7px; border-radius: 5px; font-weight: 600; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .row { height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 10px; cursor: grab; }
+  .b { height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+       border-radius: 6px; color: var(--text); font-weight: 500; font-size: 12.5px; padding: 0 7px; cursor: pointer; }
+  .b.dim { color: var(--text2); }
+  .step { min-width: 62px; }
+  .step .n { color: var(--text2); }
+  .step.hot .n { color: var(--text); }
+  .play { width: 30px; height: 30px; min-width: 30px; border-radius: 50%; background: rgba(255,255,255,.14); padding: 0; }
+  .readout { margin-left: 12px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .readout .dur { color: var(--text2); font-weight: 500; }
+  .readout.accent .cur { color: var(--accent); }
+  .spacer { flex: 1; align-self: stretch; }
+  .chip { height: 24px; min-width: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px;
+          font-weight: 600; font-size: 12.5px; color: var(--text2); position: relative; cursor: pointer; padding: 0 6px; }
+  .chip.on { background: rgba(255,255,255,.18); color: var(--text); }
+  .chip .dot { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+  svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .play svg, .tri svg { fill: currentColor; stroke: none; }
+  .tri svg { width: 10px; height: 10px; }
+  .pill { position: absolute; right: 16px; bottom: 16px; height: 36px; border-radius: 18px; display: flex; align-items: center;
+          gap: 8px; padding: 0 8px 0 3px; background: var(--surface); color: var(--text); backdrop-filter: blur(14px);
+          font-variant-numeric: tabular-nums; font-weight: 600; overflow: hidden; }
+  .pill .play { margin: 0; }
+  .pill .prog { position: absolute; left: 0; bottom: 0; height: 2px; width: 48%; background: var(--accent); }
+  .pill .rate { color: var(--text2); font-weight: 500; }
+  .menu { position: absolute; right: 60px; bottom: 58px; width: 290px; background: rgba(24,25,29,.96); color: var(--text);
+          border-radius: 10px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,.35); border: 1px solid var(--hair); }
+  .mi { padding: 7px 10px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+  .mi.hover { background: rgba(90,168,255,.16); }
+  .mi .muted { color: var(--text2); }
+  .msep { height: 1px; background: var(--hair); margin: 4px 0; }
+  .toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); background: rgba(24,25,29,.94); color: var(--text);
+           padding: 9px 14px; border-radius: 10px; display: flex; gap: 14px; white-space: nowrap; }
+  .toast a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .note { position: absolute; right: 14px; top: 10px; font-size: 12px; color: rgba(255,255,255,.8); }
+</style>
+</head>
+<body>
+<h1>media-scrubber — bar mockup, revision 3</h1>
+<p class="lead">Fewer controls: step ◀ · play · step ▶ · time · speed · (media) · collapse · close. The number on a step
+button is the step its next press makes; it climbs a 1-2-5 ladder while you keep pressing. Keys: Space, ←, →.
+Static design artifact, not extension code.</p>
+
+<template id="row">
+  <div class="row">
+    <span class="b step back"><span class="tri"><svg viewBox="0 0 10 10"><path d="M8 1v8L1.5 5z"/></svg></span><span class="n">0.1</span></span>
+    <span class="b play"><svg viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5z"/></svg></span>
+    <span class="b step fwd"><span class="n">0.1</span><span class="tri"><svg viewBox="0 0 10 10"><path d="M2 1v8l6.5-4z"/></svg></span></span>
+    <span class="readout"><span class="cur">0:02.4</span> <span class="dur">/ 0:05.0</span></span>
+    <span class="spacer"></span>
+    <span class="chip">0.5</span><span class="chip on">0.75</span><span class="chip">1</span><span class="chip">▾</span>
+    <span class="b media dim">▣&nbsp;2/3</span>
+    <span class="b dim"><svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg></span>
+    <span class="b dim"><svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg></span>
+  </div>
+</template>
+
+<div class="frame" data-kind="default"><span class="caption">1 · Default — docked bottom, playing at 0.75×</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="bar"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:48%"></div><div class="ticks"></div><div class="head" style="left:48%"></div></div></div>
+</div>
+
+<div class="frame light" data-kind="default"><span class="caption">2 · Same bar on a white page</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="bar"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:48%"></div><div class="ticks"></div><div class="head" style="left:48%"></div></div></div>
+</div>
+
+<div class="frame" data-kind="streak"><span class="caption">3 · Pressing ← four times quickly — the back button now offers the next rung (2 s)</span>
+  <span class="note">ladder: 0.1 → 0.2 → 0.5 → 1 → <b>2</b> → 5 → 10 → 30 → 60</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="bar"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:30%"></div><div class="ticks"></div><div class="head" style="left:30%"></div></div></div>
+</div>
+
+<div class="frame" data-kind="paused"><span class="caption">4 · Paused on a video — the ladder starts at one frame (1f)</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="bar"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:48%"></div><div class="ticks"></div><div class="head" style="left:48%"></div></div></div>
+</div>
+
+<div class="frame" data-kind="scrub"><span class="caption">5 · Scrubbing — time under the pointer, readout in accent, play state untouched</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="tip" style="left:71%">0:03.5</div>
+  <div class="bar scrub"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:71%"></div><div class="ticks"></div><div class="head" style="left:71%"></div><div class="knob" style="left:71%"></div></div></div>
+</div>
+
+<div class="frame" data-kind="end"><span class="caption">6 · Stopped at the end (always on) — Space plays the next clip</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="bar"><div class="rail"><div class="track"></div><div class="buf" style="width:100%"></div><div class="played" style="width:99.6%"></div><div class="ticks"></div><div class="head" style="left:99.6%"></div></div></div>
+</div>
+
+<div class="frame light" data-kind="rest"><span class="caption">7 · Rest (idle 3 s)</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="bar rest"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:48%"></div><div class="ticks"></div><div class="head" style="left:48%"></div></div></div>
+</div>
+
+<div class="frame" data-kind="menu"><span class="caption">8 · Media chip + menu — active element outlined on the page</span>
+  <div class="page"><div class="video outlined"><span class="label">Controlling · video 860×483 · 0:05.0</span></div></div><div style="height:52px"></div>
+  <div class="menu"><div class="mi">● Automatic — follow what plays</div><div class="msep"></div>
+    <div class="mi hover">▣ Video 860×483 · 0:02.5 <span class="muted">· playing</span></div>
+    <div class="mi">▣ Video 860×483 · 0:05.0 <span class="muted">· paused</span></div>
+    <div class="mi">♪ Audio · 0:08.0 <span class="muted">· paused</span></div></div>
+  <div class="bar"><div class="rail"><div class="track"></div><div class="buf" style="width:78%"></div><div class="played" style="width:48%"></div><div class="ticks"></div><div class="head" style="left:48%"></div></div></div>
+</div>
+
+<div class="frame dark" data-kind="contested"><span class="caption">9 · Floating on a dark page · speed contested (amber dot)</span>
+  <div class="page" style="height:240px"><div class="video"></div></div>
+  <div class="bar floating"><div class="rail"><div class="track"></div><div class="buf" style="width:60%"></div><div class="played" style="width:22%"></div><div class="ticks"></div><div class="head" style="left:22%"></div></div></div>
+</div>
+
+<div class="frame" data-kind="none"><span class="caption">10 · Collapsed pill</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="pill"><span class="b play"><svg viewBox="0 0 16 16" style="fill:currentColor;stroke:none"><path d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z"/></svg></span>
+    <span>0:02.4</span><span class="rate">· 0.75</span><span class="b dim" style="min-width:20px;padding:0"><svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></svg></span><span class="prog"></span></div>
+</div>
+
+<div class="frame" data-kind="none"><span class="caption">11 · Closed — undo toast</span>
+  <div class="page"><div class="video"></div></div><div style="height:52px"></div>
+  <div class="toast">Media Scrubber closed — reopen with the toolbar icon or Alt+Shift+M <a href="#">Undo</a></div>
+</div>
+
+<script>
+  // Static mockup only: stamp the shared controls row into each bar and vary it per panel.
+  const tpl = document.getElementById('row');
+  document.querySelectorAll('.frame').forEach(frame => {
+    const bar = frame.querySelector('.bar'); if (!bar) return;
+    bar.appendChild(tpl.content.cloneNode(true));
+    const kind = frame.dataset.kind, q = s => bar.querySelector(s);
+    const pause = () => q('.play').replaceChildren(Object.assign(document.createElementNS('http://www.w3.org/2000/svg','svg'), {}));
+    if (kind === 'default' || kind === 'rest' || kind === 'menu' || kind === 'contested' || kind === 'scrub') {
+      q('.play svg').innerHTML = '<path d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z"/>';
+    }
+    if (kind !== 'menu') q('.media').remove();
+    if (kind === 'streak') { q('.back').classList.add('hot'); q('.back .n').textContent = '2'; q('.cur').textContent = '0:01.5';
+      q('.play svg').innerHTML = '<path d="M4.5 3h2.5v10H4.5zM9 3h2.5v10H9z"/>'; }
+    if (kind === 'paused') { q('.back .n').textContent = '1f'; q('.fwd .n').textContent = '1f'; }
+    if (kind === 'scrub') { q('.readout').classList.add('accent'); q('.cur').textContent = '0:03.5'; }
+    if (kind === 'end') { q('.cur').textContent = '0:04.9'; q('.back .n').textContent = '1f'; q('.fwd .n').textContent = '1f'; }
+    if (kind === 'contested') { const d = document.createElement('span'); d.className = 'dot'; q('.chip.on').appendChild(d); q('.cur').textContent = '0:01.1'; }
+  });
+</script>
+</body>
+</html>

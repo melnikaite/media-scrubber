@@ -31,7 +31,7 @@
       collapsed: S.collapsed, placement: S.placement, fullscreen: !!document.fullscreenElement,
       media: S.media ? { kind: 'video', ready: S.ready, time: S.time, duration: D, range: S.ready ? { start: 0, end: D } : null,
         live: false, buffered: [[0, 3.9]], paused: S.paused, atEnd: S.atEnd } : null,
-      rate: S.rate, rateContested: S.contested, presets: [0.5, 0.75, 1], moreSpeeds: [0.25, 0.6, 0.9, 1.25, 1.5, 2],
+      rate: S.rate, rateContested: S.contested, presets: [0.5, 0.75, 1],
       step: { back: label(-1), fwd: label(1) }, stepHot: S.stepHot,
       candidates: S.candidates.map((c) => ({ ...c, paused: c.ref === S.active ? S.paused : true, active: c.ref === S.active })),
       pinned: !!S.pinned,
@@ -50,6 +50,7 @@
   }
   const ctl = {
     togglePlay() { log('togglePlay', []); if (S.atEnd) { S.atEnd = false; S.time = 0; } S.paused = !S.paused; push(); },
+    restart() { log('restart', []); S.atEnd = false; S.time = 0; S.paused = false; push(); },
     stepPress(dir) { log('stepPress', [dir]); step(dir); push(); },
     stepRelease(dir) { log('stepRelease', [dir]); push(); },
     wheelStep(dir) { log('wheelStep', [dir]); step(dir); push(); },

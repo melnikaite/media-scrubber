@@ -75,13 +75,17 @@ All pages load `common.js` (no inline scripts, DOM via `createElement`). Common 
 | `iframe.html` | same-origin child `#same` and cross-origin child `#cross` (`localhost` ↔ `127.0.0.1`, same port) → `iframe-child.html` | child: `origin`, own key loggers, `media.main` |
 | `nomedia.html` | text only; `#add` appends and plays a video later | — |
 
-### Adaptive stop-at-end
+### Stop at end: last frame
 
-`reels.html?earlyms=N` makes the page end each clip by itself N ms before its
-end (checked on `timeupdate` and rAF), modelling sites whose own end detection
-fires earlier than our default 0.1 s margin. `reels_adaptive` (1×) and
-`reels_adaptive_slow` (0.5×) assert that after the first pre-empted clip the
-learned margin (`ms:debug` → `endMargin`) makes every following clip stop first.
+`reels_stop_at_end` (1×), `reels` (0.5×) and `reels_pauserecovery[_slow]` assert every clip stops
+paused within 0.085 s (2 frames) of its end, never `ended`. On `clip-3s` the page's own early
+pause at `duration − 0.05` may act before our last-frame stop; then the page's `play()` of the
+next clip must be held by the gate. Each clip's note reports `path: 'ours' | 'site'` and `left`.
+
+### Restart
+
+`restart` (`single.html`, then `single.html?pauserecovery=300`): play to 3 s, Space-pause, click
+`↺` at `ui.rects.restart` → `currentTime` ≈ 0 and playing; the pause hold must not block it.
 
 ### Pause recovery (pause hold)
 

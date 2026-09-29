@@ -26,9 +26,9 @@ DESIGN §0. Companion to [DESIGN.md](DESIGN.md). Mockup:
  viewport left edge                                                             viewport right edge
 ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
 │▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔█░░░░░░░░░░░░░░░· · · · · · · · · · · · · · · · · · · · · · · · · · ·│ RAIL 20 px hit
-│  ◀ 0.1   ▶   0.1 ▶    0:02.4 / 0:05.0                                  0.5  0.75  1  ▾   ▣2/3  ⌄  × │ ROW 32 px
+│  ↺  ◀ 0.1   ▶   0.1 ▶    0:02.4 / 0:05.0                                  0.5  0.75  1   ▣2/3  ⌄  × │ ROW 32 px
 └───────────────────────────────────────────────────────────────────────────────────────────────────┘
-   step  play  step     readout              (empty area = drag handle)    speed        media  collapse close
+restart step play step     readout              (empty area = drag handle)    speed     media  collapse close
 ```
 
 Total height 52 px. The rail is always the top edge of the bar.
@@ -60,11 +60,12 @@ Total height 52 px. The rail is always the top edge of the bar.
 
 | Control | Behaviour |
 |---|---|
+| **Restart `↺`** | First control of the row, 28×28 icon button. Seeks to the start of the range and plays (also from a stopped end, and past a pause hold). No keyboard shortcut; not in the pill. |
 | **Step back `◀ 0.1`** / **step forward `0.1 ▶`** | Seek by the current ladder step (§2.3). The number on the button is always the step the *next* press will make, so it grows during a streak (`◀ 0.5`, `◀ 2`) and returns to its base when the streak ends. When paused on a video the base is one frame and the button reads `◀ 1f`. Press-and-hold repeats and climbs the ladder. |
 | **Play/pause** | 30 px round button, white glyph on a white 14 % disc (accent only on hover). Reacts on `pointerdown`. At the end of a clip (stopped there, §2.4) it shows `▶` and continues. |
 | **Readout** | `0:02.4 / 0:05.0` — current 15 px semibold, duration secondary. Tenths always, truncated. `m:ss.t` under an hour, `h:mm:ss.t` beyond. Live: `LIVE` / `−0:12.3`. |
 | **Empty row area** | Drag handle (cursor `grab` over it). Double-click: dock to bottom. |
-| **Speed `0.5 0.75 1 ▾`** | Plain text chips; the chosen one gets a white 18 % pill and full-white text, the others secondary text. `▾` opens 0.25 · 0.6 · 0.9 · 1.25 · 1.5 · 2; when one of those is chosen the `▾` reads `1.25 ▾` and carries the pill. Always ours while the bar is open. |
+| **Speed `0.5 0.75 1`** | Plain text chips; the chosen one gets a white 18 % pill and full-white text, the others secondary text. If the rate is not a preset (adopted from the site on open, e.g. 1.25), one extra chip `1.25` follows the presets, selected; it disappears once a preset is picked. No menu. Always ours while the bar is open. |
 | **Speed contested** | The chosen chip gets a small amber dot while the site keeps resetting the speed (DESIGN §6.4 fallback). |
 | **Media `▣2/3`** | Only with ≥ 2 candidates or a pin (§5). |
 | **Collapse `⌄`** | To the pill (§3.3). |
@@ -97,15 +98,17 @@ step:  [1 frame] 0.1   0.2   0.5   1    2    5     10    30    60 s
 ### 2.4 Stopping at the end
 
 While the bar is open, every clip stops paused on its last frame instead of
-letting the site auto-advance (DESIGN §6.13). There is no toggle. `Space` or the
+letting the site auto-advance (DESIGN §6.13) — the whole clip plays, the stop
+lands within about a frame of the end. There is no toggle. `Space` or the
 play button then **continues**: the clip plays out its last milliseconds and the
 site moves on as it normally would (on reels sites: the next clip, which again
-stops at its end). To hear the clip again, step back (`←`) or click the rail.
+stops at its end). To hear the clip again, press `↺` (restart), step back (`←`) or click the rail.
 The site's own "next" button still works immediately.
 
 ### 2.5 Narrow viewports
 
-- **< 600 px:** speed chips collapse into one `0.75 ▾` button.
+- **< 600 px:** nothing collapses — the three speed chips stay (the readout and
+  spacer shrink first).
 - The rail is never shortened.
 
 ## 3. States

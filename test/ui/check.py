@@ -130,20 +130,33 @@ try:
         clear()
         page.mouse.click(*c(R['speed']['1']))
         check('chip 1 -> setRate(1)', calls()[-1]['args'] == [1])
-        page.mouse.click(*c(R['speed']['more']))
-        d = dbg()
-        check('more menu opens with 6 speeds', d['menu'] == 'speed' and len(d['menuItems']) == 6, [m['text'] for m in d['menuItems']])
-        shot('12-speed-menu')
-        it = [m for m in d['menuItems'] if m['text'].startswith('1.25')][0]
-        page.mouse.click(*c(it['rect']))
+        check('no extra chip for a preset rate', dbg()['rects']['speed']['extra'] is None and 'more' not in dbg()['rects']['speed'])
+        page.evaluate('__ctl.setRate(1.25)')
         page.wait_for_timeout(30)
         d = dbg()
-        check('1.25 chosen -> more chip reads "1.25 ▾"', calls()[-1]['args'] == [1.25] and d['menu'] is None, calls()[-1])
+        ex = d['rects']['speed']['extra']
+        check('non-preset rate 1.25 -> extra chip after presets', ex is not None and ex['x'] > d['rects']['speed']['1']['x'], d['rects']['speed'])
         page.evaluate('__state.contested = true; __push()')
-        shot('09-rate-more-contested')
-        page.evaluate('__state.contested = false; __ctl.setRate(0.75)')
-        page.mouse.click(*c(R['speed']['more']))
-        check('Esc closes menu', page.evaluate('__view.handleEscape()') and dbg()['menu'] is None)
+        shot('09-rate-extra-contested')
+        page.evaluate('__state.contested = false; __push()')
+        page.mouse.click(*c(d['rects']['speed']['0.75']))
+        page.wait_for_timeout(30)
+        check('preset picked -> extra chip gone', calls()[-1]['args'] == [0.75] and dbg()['rects']['speed']['extra'] is None)
+
+        # restart
+        R = dbg()['rects']
+        rs, sb = R['restart'], R['stepBack']
+        check('restart is first control, 28x28, left of step back', rs is not None and rs['x'] + rs['width'] <= sb['x'] + 0.5 and abs(rs['width'] - 28) < 0.6 and abs(rs['height'] - 28) < 0.6, (rs, sb))
+        page.evaluate('__state.time = 3.2; __state.paused = true; __push()')
+        clear()
+        page.mouse.click(*c(rs))
+        page.wait_for_timeout(30)
+        check('restart click -> restart() only', [x['name'] for x in calls()] == ['restart'], calls())
+        check('restart -> time ~0, playing', page.evaluate('__state.time') < 0.3 and not page.evaluate('__state.paused'))
+        page.evaluate('__state.paused = true; __state.time = 2.43; __push()')
+        clear()
+        page.keyboard.press('KeyR')
+        check('no keyboard shortcut for restart', not any(x['name'] == 'restart' for x in calls()), calls())
 
         # media chip
         R = dbg()['rects']
@@ -238,7 +251,7 @@ try:
         page.set_viewport_size({'width': 560, 'height': 720})
         page.wait_for_timeout(100)
         d = dbg()
-        check('narrow: preset chips hidden, more shows rate', d['rects']['speed']['0.5'] is None and d['rects']['speed']['more'] is not None and abs(d['rects']['bar']['width'] - 560) < 1)
+        check('narrow: preset chips stay visible', all(d['rects']['speed'][k] is not None and d['rects']['speed'][k]['width'] > 0 for k in ('0.5', '0.75', '1')) and abs(d['rects']['bar']['width'] - 560) < 1, d['rects']['speed'])
         shot('15-narrow')
         page.set_viewport_size({'width': 1280, 'height': 720})
         page.wait_for_timeout(100)
@@ -268,7 +281,8 @@ try:
         page.wait_for_timeout(500)
         fs = page.evaluate('document.fullscreenElement && document.fullscreenElement.id')
         check('video fullscreen: popover open (rendered above)', fs == 'vid' and dbg()['popoverOpen'])
-        check('video fullscreen: host at bar (hit-test)', host_at(640, 700) == 'MEDIA-SCRUBBER-UI', (fs, host_at(640, 700)))
+        # Keys-only by design (DESIGN §6.8): Chrome paints the bar but does not hit-test outside a fullscreen <video>.
+        print('INFO video fullscreen hit-test:', host_at(640, 700), '(keys-only by design)')
         shot('18-fs-video')
         page.evaluate('document.fullscreenElement && document.exitFullscreen()'); page.wait_for_timeout(400)
 

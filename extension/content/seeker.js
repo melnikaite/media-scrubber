@@ -255,55 +255,24 @@
   }
 
   // ---- stop at end ----
-  // End margin (§6.13): max(default, learned) media seconds × max(1, rate), capped at 15 % of the
-  // clip. `learned` is per document, in memory only: raised when the site pre-empts our stop.
-  let learned = 0;
-  function clipCap(el) {
-    const d = el.duration;
-    return MS.finite(d) && d > 0 ? Math.min(C.END_LEARN_CAP_S, C.END_CAP_FRAC * d) : C.END_LEARN_CAP_S;
-  }
-  function defaultMargin(entry, el) {
-    const base = entry.kind === 'video' ? 1.5 * frameDuration(el) : C.AUDIO_END_WATCH;
-    return Math.max(C.END_MARGIN_S, base);
-  }
+  // End margin (§6.13): stop on the last frame. Video: max(1 frame, 0.035 s x max(1, rate));
+  // audio: 0.035 s x max(1, rate) -- enough that a 60 Hz check still pauses before `ended`.
   function watchEps(entry, el) {
-    // Never below the 1x margin: slow rates must still beat a site's own early end check.
-    const m = Math.max(defaultMargin(entry, el), learned) * Math.max(1, el.playbackRate || 1);
-    const d = el.duration;
-    return MS.finite(d) && d > 0 ? Math.min(m, C.END_CAP_FRAC * d) : m;
+    const m = C.END_WATCH_S * Math.max(1, el.playbackRate || 1);
+    return entry.kind === 'video' ? Math.max(frameDuration(el), m) : m;
   }
   function nearEnd(entry, el, slack) {
     const d = el.duration;
     if (!MS.finite(d) || d <= 0) return false;
     return el.ended || el.currentTime >= d - watchEps(entry, el) - (slack || 0);
   }
-  // `quiet`: we paused this element ourselves (stop at end, or the user's pause) or it is already
-  // stopped at its end; nothing that happens to it counts as a pre-emption until it plays again.
-  function onPlay(entry) { const el = entry.el(); if (el) memo(el).quiet = false; }
   // Every pause we make leaves a MAIN-world hold (§6.13 pause hold): a page play() on this
   // element is deferred until we play it or the user acts on the page's own UI.
-  function ownPause(el) { memo(el).quiet = true; el.pause(); MS.emitNode(MS.EV.hold, el); }
+  function ownPause(el) { el.pause(); MS.emitNode(MS.EV.hold, el); }
   // Our own play: drop the hold first (MAIN settles deferred page calls with a native play()).
   function ownPlay(el) { MS.emitNode(MS.EV.unhold, el); el.play().catch(() => {}); }
-  // The site acted on the still-playing active element before our stop: learn how early.
-  function preempted(entry, el) {
-    if (!el || !MS.state.open || el.ended || MS.state.passRef === entry.ref) return;
-    const m = memo(el);
-    if (m.quiet || MS.state.atEndRef === entry.ref) return;
-    const d = el.duration;
-    if (!MS.finite(d) || d <= 0) return;
-    const r = d - el.currentTime;
-    const cap = clipCap(el);
-    // Only a stop we could have beaten: later than our margin, within the cap (a mid-clip pause
-    // from the site's own UI is not an end detection).
-    if (!(r > watchEps(entry, el)) || r > cap) return;
-    m.quiet = true;
-    const extra = entry.kind === 'video' ? 2 * frameDuration(el) : C.END_LEARN_EXTRA_S;
-    learned = Math.min(Math.max(learned, r + extra), cap);
-  }
   function arm(entry, el) {
     const wasArmed = MS.state.prearmRef === entry.ref;
-    memo(el).quiet = true;
     MS.state.atEndRef = entry.ref;
     MS.state.prearmRef = entry.ref;
     if (wasArmed) return;
@@ -338,16 +307,11 @@
   function onPausedOrEnded(entry) {
     const el = entry.el();
     if (!el || MS.state.passRef === entry.ref) return;
-    preempted(entry, el);          // a pause we did not cause, earlier than our margin
     if (MS.state.prearmRef === entry.ref || nearEnd(entry, el, 0.05)) arm(entry, el);
   }
   function endMarginDebug(entry) {
     const el = entry && entry.local && entry.el();
-    return {
-      default: el ? defaultMargin(entry, el) : C.END_MARGIN_S,
-      learned,
-      effective: el ? watchEps(entry, el) : null,
-    };
+    return { effective: el ? watchEps(entry, el) : null };
   }
 
   function reset() {
@@ -360,6 +324,6 @@
     range, clamp, logical, seekTo, onSeeked, onReset, frameDuration,
     watchFrames, unwatchFrames,
     stepPress, stepRelease, wheelStep, labels, execStep,
-    endCheck, onPausedOrEnded, onPlay, ownPause, ownPlay, preempted, endMarginDebug, reset,
+    endCheck, onPausedOrEnded, ownPause, ownPlay, endMarginDebug, reset,
   };
 })();

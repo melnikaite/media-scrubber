@@ -11,7 +11,6 @@
   const SNAP = 48;
   const IDLE_MS = 3000;
   const NEAR_PX = 64;
-  const NARROW_PX = 600;
   const TICK_MIN_PX = 40;
   const TICK_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 18000, 36000];
 
@@ -23,6 +22,7 @@
     collapse: ['0 0 16 16', 'm4 6 4 4 4-4', false],
     expand: ['0 0 16 16', 'm4 10 4-4 4 4', false],
     close: ['0 0 16 16', 'm4.5 4.5 7 7M11.5 4.5l-7 7', false],
+    restart: ['0 0 16 16', 'M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3.5 2.5v2.7h2.7', false],
     pin: ['0 0 16 16', 'M8 10.5V15M5 1.5h6M6 1.5v4L3.5 9h9L10 5.5v-4', false],
   };
 
@@ -137,7 +137,7 @@
     let scrub = null;              // {id, spp, left, startTime, baseX, baseT, shift, t, range}
     let drag = null;               // {id, startY, startTop, top, moved, zone}
     let localPlacement = null;     // placement applied locally until the model catches up
-    let menu = null;               // null | 'speed' | 'media'
+    let menu = null;               // null | 'media'
     let chipHover = false;
     let outlineRef = null;         // candidate ref being outlined (row hover), else active
     let outlineRaf = 0;
@@ -175,6 +175,8 @@
     void track;
 
     const row = el('div', 'row', bar);
+    const restartBtn = button('restart', 'Restart from the beginning', row);
+    restartBtn.appendChild(icon('restart'));
     const stepBack = button('step back', stepAria(-1, '0.1'), row);
     stepBack.appendChild(icon('back', 'tri'));
     const backN = el('span', 'n', stepBack);
@@ -190,9 +192,10 @@
     const spacer = el('div', 'spacer', row);
     const speed = el('div', 'speed', row);
     const chips = new Map(); // label -> button
-    const more = button('chip more', 'More speeds', speed);
-    const moreTxt = el('span', '', more);
-    el('span', 'dot', more);
+    // Extra chip for an adopted non-preset rate (e.g. 1.25), after the presets.
+    const extra = button('chip extra hidden', 'Speed', speed);
+    const extraTxt = el('span', '', extra);
+    el('span', 'dot', extra);
     const mediaBtn = button('media dim hidden', 'Choose media', row);
     const mediaPin = icon('pin', 'pin');
     const mediaTxt = el('span', '', mediaBtn);
@@ -278,6 +281,7 @@
       setCls(rail, 'disabled', !enabled);
       setAttr(rail, 'aria-disabled', enabled ? 'false' : 'true');
       const noMedia = !m;
+      restartBtn.disabled = noMedia || !enabled;
       stepBack.disabled = noMedia || !enabled;
       stepFwd.disabled = noMedia || !enabled;
       playBtn.disabled = noMedia;
@@ -388,7 +392,6 @@
       const presets = (model && model.presets) || [0.5, 0.75, 1];
       const rate = model ? model.rate : 1;
       const contested = !!(model && model.rateContested);
-      const narrow = vw < NARROW_PX;
       const pk = presets.join(',');
       if (changed('presets', pk)) {
         for (const b of chips.values()) b.remove();
@@ -399,12 +402,11 @@
           el('span', '', b).textContent = lab;
           el('span', 'dot', b);
           b.addEventListener('click', () => { closeMenu(); call('setRate', r); });
-          speed.insertBefore(b, more);
+          speed.insertBefore(b, extra);
           chips.set(lab, b);
         }
       }
-      if (!changed('speed', `${pk}|${rate}|${contested}|${narrow}`)) return;
-      setCls(bar, 'narrow', narrow);
+      if (!changed('speed', `${pk}|${rate}|${contested}`)) return;
       let isPreset = false;
       for (const r of presets) {
         const on = sameRate(r, rate);
@@ -414,11 +416,14 @@
         setCls(b, 'contested', on && contested);
         setAttr(b, 'aria-pressed', on ? 'true' : 'false');
       }
-      const moreOn = narrow || !isPreset;
-      setText(moreTxt, moreOn ? `${rateLabel(rate)} ▾` : '▾');
-      setCls(more, 'on', moreOn);
-      setCls(more, 'contested', moreOn && contested);
-      setAttr(more, 'aria-label', `Speed ${rateLabel(rate)}, more speeds`);
+      setCls(extra, 'hidden', isPreset);
+      setCls(extra, 'on', !isPreset);
+      setCls(extra, 'contested', !isPreset && contested);
+      setAttr(extra, 'aria-pressed', isPreset ? 'false' : 'true');
+      if (!isPreset) {
+        setText(extraTxt, rateLabel(rate));
+        setAttr(extra, 'aria-label', `Speed ${rateLabel(rate)}`);
+      }
       pRate.textContent = `· ${rateLabel(rate)}`;
     }
 
@@ -575,7 +580,12 @@
     playBtn.addEventListener('pointerdown', onPlay);
     pPlay.addEventListener('pointerdown', onPlay);
 
-    more.addEventListener('click', () => { if (menu === 'speed') closeMenu(); else openSpeedMenu(); });
+    restartBtn.addEventListener('click', () => {
+      if (!(model && model.media)) return;
+      closeMenu();
+      wake();
+      call('restart');
+    });
     mediaBtn.addEventListener('click', () => { if (menu === 'media') closeMenu(); else openMediaMenu(); });
     mediaBtn.addEventListener('pointerenter', () => { chipHover = true; outlineRef = null; startOutline(); });
     mediaBtn.addEventListener('pointerleave', () => { chipHover = false; });
@@ -615,23 +625,6 @@
       }
       return it;
     }
-    function openSpeedMenu() {
-      closeMenu();
-      menu = 'speed';
-      menuEl.replaceChildren();
-      const rate = model ? model.rate : 1;
-      const list = [];
-      if (vw < NARROW_PX) for (const r of (model && model.presets) || []) list.push(r);
-      for (const r of (model && model.moreSpeeds) || []) if (!list.some((x) => sameRate(x, r))) list.push(r);
-      list.sort((a, b) => a - b);
-      for (const r of list) {
-        menuItem([rateLabel(r) + '×'], sameRate(r, rate), () => { closeMenu(); call('setRate', r); });
-      }
-      menuEl.setAttribute('aria-label', 'Speed');
-      positionMenu(more);
-      setAttr(more, 'aria-expanded', 'true');
-      wake();
-    }
     function buildMediaMenu() {
       menuEl.replaceChildren();
       const cands = (model && model.candidates) || [];
@@ -662,7 +655,6 @@
       outlineRef = null;
       setCls(menuEl, 'open', false);
       menuEl.replaceChildren();
-      setAttr(more, 'aria-expanded', 'false');
       setAttr(mediaBtn, 'aria-expanded', 'false');
       arm();
       return true;
@@ -671,7 +663,7 @@
     root.addEventListener('pointerdown', (e) => {
       if (!menu) return;
       const t = e.target;
-      if (menuEl.contains(t) || (menu === 'speed' && more.contains(t)) || (menu === 'media' && mediaBtn.contains(t))) return;
+      if (menuEl.contains(t) || (menu === 'media' && mediaBtn.contains(t))) return;
       closeMenu();
     }, true);
     const onWinDown = (e) => { if (menu && e.target !== H.host) closeMenu(); };
@@ -877,7 +869,7 @@
       const alive = !destroyed;
       const speedRects = {};
       for (const [k, b] of chips) speedRects[k] = alive ? rectOf(b) : null;
-      speedRects.more = alive ? rectOf(more) : null;
+      speedRects.extra = alive && !extra.classList.contains('hidden') ? rectOf(extra) : null;
       return {
         hostPresent: alive && H.host.isConnected,
         popoverOpen: alive && H.isOpen(),
@@ -891,6 +883,7 @@
           bar: alive && !closing ? rectOf(bar) : null,
           rail: alive && !closing ? rectOf(rail) : null,
           play: alive && !closing ? rectOf(playBtn) : null,
+          restart: alive && !closing ? rectOf(restartBtn) : null,
           stepBack: alive && !closing ? rectOf(stepBack) : null,
           stepFwd: alive && !closing ? rectOf(stepFwd) : null,
           speed: speedRects,

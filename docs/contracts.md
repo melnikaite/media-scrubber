@@ -77,10 +77,9 @@ only). `view` methods:
     paused: false,
     atEnd: false,                     // stopped at the end (DESIGN §6.13)
   },
-  rate: 0.75,
+  rate: 0.75,                         // not a preset (e.g. 1.25 adopted on open) → one extra selected chip after the presets
   rateContested: false,
   presets: [0.5, 0.75, 1],
-  moreSpeeds: [0.25, 0.6, 0.9, 1.25, 1.5, 2],
   step: { back: '0.1', fwd: '0.1' },  // label of the next step: '1f' | '0.1' | '0.2' | '0.5' | '1' | '2' | '5' | '10' | '30' | '60'
   stepHot: { back: false, fwd: false },   // true while a streak in that direction is live (label shows a climbed rung)
   candidates: [                       // non-ambient first; the chip shows only if length >= 2 or pinned
@@ -98,10 +97,11 @@ reads media elements itself.
 | Call | Meaning |
 |---|---|
 | `togglePlay()` | Play/pause (at a stopped end: release the deferred next clip or replay) |
+| `restart()` | ↺: unhold + disarm + exact seek to the range start + our own play (releases the pause hold). Remote active element: child command `restart` |
 | `stepPress(dir)` / `stepRelease(dir)` | `dir` = −1 or +1. Press applies one step immediately; holding (no release yet) repeats at `HOLD_STEPS_PER_S` inside core. Buttons call press on `pointerdown`, release on `pointerup`/`pointercancel`/`lostpointercapture`. |
 | `wheelStep(dir)` | One ladder step (press+release) |
 | `seekTo(t, final)` | Scrub: `final=false` while dragging (pipelined), `true` on release (exact) |
-| `setRate(r)` | Any positive number from the presets/menu |
+| `setRate(r)` | Any positive number (the preset chips) |
 | `pin(ref \| null)` | Pin a candidate, or back to automatic |
 | `setCollapsed(bool)` | |
 | `setPlacement({dock, y})` | On drag end only |
@@ -143,7 +143,7 @@ top frame with `from: frameId` added. Non-finite numbers travel as `'Infinity'` 
 | `{t:'key', key: 'Space'\|'ArrowLeft'\|'ArrowRight', phase: 'down'\|'up'}` | child → top | a handled key with focus in the child (swallowed there); the top runs the local key path |
 | `{t:'state', open, rate}` | top → child / all | read-only copy of Intent; on connect, hello, rate change, close (`open: false`) |
 | `{t:'active', id \| null, pinned}` | top → child | which of the child's local ids is the global active element |
-| `{t:'cmd', id, c: 'toggle'}` / `{…, c: 'seek', time, final}` / `{…, c: 'step', dir, size}` | top → child | executed by the child's own core (pipeline, stop at end, gate). The ladder (rung choice, hold repeat, labels) runs in the top frame; `size` is seconds or `'f'` (one frame) |
+| `{t:'cmd', id, c: 'toggle'}` / `{…, c: 'restart'}` / `{…, c: 'seek', time, final}` / `{…, c: 'step', dir, size}` | top → child | executed by the child's own core (pipeline, stop at end, gate). The ladder (rung choice, hold repeat, labels) runs in the top frame; `size` is seconds or `'f'` (one frame) |
 | `{t:'rects'}` | top → child | re-send `cands` (fresh rects) for the outline; at most every 150 ms |
 | `{t:'frame-gone', from}` | SW → top | a child port disconnected; its entries are removed |
 | `{t:'top-gone'}` | SW → children | the top port disconnected; children close |
@@ -169,19 +169,20 @@ one level → `null` (label alone).
   active: null | { ref, kind, src, currentTime, paused, ended, playbackRate, defaultPlaybackRate, preservesPitch },
   candidates: [ { ref, kind, src, ambient, lastPlayAt, via } ],   // via: 'light' | 'shadow' | 'detached'
   atEnd: false, gateHeld: false,      // for a remote active element: from its snapshot
-  endMargin: { default: 0.1, learned: 0, effective: 0.1 },  // stop-at-end margin, media s (DESIGN §6.13);
-                                      // this frame's values; effective is null without a local active element
+  endMargin: { effective: 0.035 },    // stop-at-end margin, media s (DESIGN §6.13): max(1 frame, 0.035 × max(1, rate)),
+                                      // audio 0.035 × max(1, rate); null without a local active element
   frames: { connected: true, frames: [3, 4] },   // top: port up + child frame ids heard from
   model: { ... },                     // the last model passed to view.update (§3.1)
   counters: { reapplies: 0, siteRateWrites: 0, seeksIssued: 0, contested: 0, holdBlocked: 0 },  // holdBlocked: pause holds that deferred a page play() (DESIGN §6.13)
   ui: null | {                        // view.getDebug(); null when headless
     hostPresent: true, popoverOpen: true, collapsed: false, dimmed: false,
-    scrubbing: false, menu: null | 'speed' | 'media', menuItems: [ { text, rect } ], outlineLabel: null | string,
+    scrubbing: false, menu: null | 'media', menuItems: [ { text, rect } ], outlineLabel: null | string,
     readout: '0:02.4 / 0:05.0',
     stepLabels: { back: '0.1', fwd: '0.1' },
-    rects: { bar, rail, play, stepBack, stepFwd, speed: { '0.5': r, '0.75': r, '1': r, more: r },
+    rects: { bar, rail, play, restart, stepBack, stepFwd, speed: { '0.5': r, '0.75': r, '1': r, extra: r | null },
              media, collapse, close, pill, pillPlay, menu, outline, toast, toastUndo }
-             // viewport CSS px {x, y, width, height} or null; speed keys are the rate labels
+             // viewport CSS px {x, y, width, height} or null; speed keys are the rate labels;
+             // `extra` = the non-preset rate chip, null while hidden
   }
 }
 ```

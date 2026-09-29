@@ -11,7 +11,7 @@
 //   top → child ({to: frameId | 'all', ...}; SW strips nothing, children ignore `to`):
 //     {t:'state', open, rate}                   read-only copy of Intent {open, rate}
 //     {t:'active', id: number|null, pinned}     which local element is the global active one
-//     {t:'cmd', id, c:'toggle'|'step'|'seek', dir?, size?, time?, final?}
+//     {t:'cmd', id, c:'toggle'|'restart'|'step'|'seek', dir?, size?, time?, final?}
 //     {t:'rects'}                               re-send candidates (fresh rects) for the outline
 //   service worker → top: {t:'frame-gone', from}; service worker → children: {t:'top-gone'}
 //   Cand = {id, kind, via, width, height, rect:{x,y,width,height}|null, duration, paused, ended,

@@ -80,6 +80,7 @@ button.dim:hover { color: var(--text); }
 .row { height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 10px; cursor: grab; }
 .bar.drag .row { cursor: grabbing; }
 .row > *:not(.readout):not(.spacer) { transition: opacity 120ms; }
+.restart { width: 28px; padding: 0; }
 .step { width: 62px; }
 .step .n { color: var(--text2); min-width: 18px; text-align: center; }
 .step.hot .n { color: var(--text); }
@@ -97,7 +98,6 @@ button.dim:hover { color: var(--text); }
 .chip.on { background: rgba(255,255,255,.18); color: var(--text); }
 .chip .dot { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); display: none; }
 .chip.on.contested .dot { display: block; }
-.bar.narrow .chip.preset { display: none; }
 .media { gap: 5px; }
 .media .pin { width: 13px; height: 13px; }
 .hidden { display: none !important; }

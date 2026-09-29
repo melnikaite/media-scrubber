@@ -105,7 +105,6 @@
       rate: intent.rate > 0 ? intent.rate : 1,      // display only, until a rate is adopted
       rateContested: !!(active && (active.local ? RC.contested(active) : MS.frames.remoteContested(active))),
       presets: C.PRESETS,
-      moreSpeeds: C.MORE_SPEEDS,
       step: lab.step,
       stepHot: lab.hot,
       candidates: candidatesCache,
@@ -147,9 +146,6 @@
   R.onMedia = (type, e) => {
     switch (type) {
       case 'play':
-        // Another element starts while the active one had not been stopped: pre-emption (§6.13).
-        if (e !== active && !e.ambient() && active && active.local) S.preempted(active, active.el());
-        if (e.local) S.onPlay(e);
         if (st.passRef === e.ref && st.passEnded) st.passRef = null;
         if (!e.ambient()) {
           if (st.atEndRef || st.gateHeld || st.prearmRef) disarm();
@@ -211,8 +207,6 @@
     const n = ev.relatedTarget;
     let e = null;
     if (MS.isMedia(n)) e = R.register(n);
-    // The site tried to start another element before our stop: pre-emption (§6.13).
-    if (active && active.local && e !== active) S.preempted(active, active.el());
     st.gateHeld = true;
     st.heldRef = e ? e.ref : null;
     render();
@@ -256,6 +250,21 @@
         disarm();
         S.ownPlay(el);
       }
+      render();
+    },
+    // Restart (§3.2): seek to the range start and play with our own play (releases the hold).
+    restart() {
+      const a = active;
+      if (!a) return;
+      a.commanded = true;
+      if (!a.local) { MS.frames.command(a, { c: 'restart' }); return; }
+      const el = a.el();
+      if (!el) return;
+      const r = S.range(el);
+      disarm();
+      st.passRef = null;
+      S.seekTo(a, r ? r.start : 0);
+      S.ownPlay(el);
       render();
     },
     stepPress: (dir) => S.stepPress(dir),
@@ -396,6 +405,7 @@
     if (!st.open) return;
     switch (m.c) {
       case 'toggle': controller.togglePlay(); break;
+      case 'restart': controller.restart(); break;
       case 'seek': controller.seekTo(Number(m.time), !!m.final); break;
       case 'step': if (active && active.local) { S.execStep(active, m.dir, m.size); render(); } break;
     }

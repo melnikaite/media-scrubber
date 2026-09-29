@@ -22,7 +22,7 @@ It works the same everywhere: no per-site code.
   1 frame (when paused) → 0.1 → 0.2 → 0.5 → 1 → 2 → 5 → 10 → 30 → 60 s.
   The button always shows the size of the next step; short clips never step
   more than a quarter of their length.
-- **Speed that sticks** — 0.5 / 0.75 / 1 plus more speeds, pitch preserved. The
+- **Speed that sticks** — 0.5 / 0.75 / 1, pitch preserved. The
   chosen speed survives the site resetting it, new clips, replaced elements and
   SPA navigation.
 - **Stops at the end of every clip** instead of letting the site auto-advance.
@@ -49,9 +49,10 @@ scripts; nothing is stored or sent anywhere.
 |---|---|
 | Open / close the bar in this tab | toolbar icon or `Alt+Shift+M` (the icon shows `ON`) |
 | Play / pause (at a stopped end: continue) | `Space` or the play button |
+| Restart from the beginning | the `↺` button |
 | Step back / forward on the ladder | `←` / `→` or `◀` / `▶` (hold to repeat) |
 | Seek | click or drag the rail; mouse wheel over the rail = one step |
-| Speed | the speed chips; `▾` for more |
+| Speed | the speed chips |
 | Move / dock | drag the empty part of the bar; double-click it to dock at the bottom |
 
 Keys work whenever the bar is open and you are not typing in a field; all

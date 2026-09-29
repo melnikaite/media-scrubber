@@ -23,11 +23,12 @@ These override the original brief; the sections below are already updated.
 - **Scrubbing preserves the play state**: playing keeps playing during a drag,
   paused stays paused.
 - **Loop and A-B loop are out.**
-- **Everything else ships in v1**, including media in iframes and extra speeds.
+- **Everything else ships in v1**, including media in iframes (extra speeds were
+  dropped later, see below).
   Per-site default speed and settings sync are dropped (nothing is persisted).
 - Accepted as proposed: plain keys, vertical-only drag at full width, ambient
   media ranked last, toolbar icon toggles the bar.
-- **Minimal controls (UI revision 3):** step back · play/pause · step forward ·
+- **Minimal controls (UI revision 3):** restart (since 2026-09-29) · step back · play/pause · step forward ·
   readout · speed · media chip (only with ≥ 2 candidates) · collapse · close.
   No captions, no tooltips, no temporary hints.
 - **Seeking steps are a logarithmic ladder** instead of fixed ±0.1/±1/±5 and
@@ -36,6 +37,16 @@ These override the original brief; the sections below are already updated.
 - **Stop at end is always on** while the bar is open (§6.13); no toggle.
 - **Keys: `Space`, `←`, `→` only** (plus `Esc` while scrubbing or in a menu).
   One command: open/close (`Alt+Shift+M`).
+- **2026-09-29 — Restart button `↺`** is back as the first control of the row:
+  seek to the range start (exact) and play (our own play, so the pause hold is
+  released). No keyboard shortcut; not in the pill.
+- **2026-09-29 — Clips play to the end.** The 0.1 s default stop margin and the
+  learned (adaptive) margin are removed — the early-cut problem was the site's
+  pause recovery, fixed by the pause hold. The end watch stops on the last frame
+  (§6.13).
+- **2026-09-29 — No extra-speeds menu.** Only the preset chips 0.5 · 0.75 · 1; a
+  non-preset rate adopted from the site on open shows as one extra selected chip
+  (e.g. `1.25`) until the user picks a preset. No narrow-viewport collapse.
 
 ---
 
@@ -209,7 +220,7 @@ Constants (content/ns.js; not user-editable in v1)
   PRESETS     = [0.5, 0.75, 1]                  shown as chips
   LADDER      = [0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60] s, preceded by one frame on a paused video
   STREAK_MS   = 600, HOLD_STEPS_PER_S = 4
-  MORE_SPEEDS = [0.25, 0.6, 0.9, 1.25, 1.5, 2]  in the ▾ menu
+  END_WATCH_S = 0.035 s                         stop-at-end margin × max(1, rate); video ≥ 1 frame (§6.13)
   IDLE_DIM_MS = 3000
 ```
 
@@ -234,7 +245,8 @@ View transient     drag target, hover, idle, open menu — UI-only, never persis
 ### 5.4 Commands (one-shot, operate on `active`)
 
 `togglePlay` (synchronous `el.pause()` when playing — "pause exactly now";
-at a stopped end: release the deferred next clip or replay, §6.13), `seekTo(t)`,
+at a stopped end: release the deferred next clip or replay, §6.13), `restart`
+(disarm, exact seek to the range start, our own play), `seekTo(t)`,
 `step(direction)` (the ladder, §6.5). Every pause *we* make (play/pause
 command, `Space`, the end-watch stop) leaves a MAIN-world **pause hold** on
 that element so the pause sticks against page-initiated `play()` (sites that
@@ -590,25 +602,14 @@ frame, and the site does not move on by itself.
 
 - **End watch:** while the active element plays, the readout rAF loop (§6.6)
   already reads `currentTime`; when `currentTime ≥ duration − ε_end`, call
-  `pause()`. ε_end = max(default, learned) × `max(1, rate)` media seconds —
-  never shrunk at slow rates, or a site's own early end check wins — and never
-  more than 15 % of the clip's duration. default = max(0.1 s, 1.5 frames) for
-  video, max(0.1 s, 0.08 s) for audio. This fires before the site's own end
-  detection (playphrase pauses and advances *before* `ended`, §1) and before
-  `ended`, so neither path runs. The rAF loop does not run in background tabs,
+  `pause()` — the clip stops on its **last frame**. ε_end = max(1 frame,
+  0.035 s × `max(1, rate)`) for video, 0.035 s × `max(1, rate)` for audio: just
+  enough that a 60 Hz rAF check still pauses before `ended` fires; in 2–5 s
+  clips every bit of the end matters, so there is no larger safety margin. A
+  site whose own end check acts even earlier (the reels fixture pauses at
+  `duration − 0.05`) may pause first — by design: the pre-armed gate holds its
+  `play()` of the next clip, and the result is the same stopped end. The rAF loop does not run in background tabs,
   so a `timeupdate` check is the backstop there (coarser; accepted).
-- **Learned margin (per document, in memory only, per frame):** a site whose
-  own end detection acts earlier than our margin *pre-empts* the stop. It is
-  detected on the active element while it still plays and we have not paused it
-  (neither our stop nor the user's pause through us; nothing after our stop
-  counts, so a site reacting to our pause — `?pauseadvance` — never ratchets):
-  the MAIN gate reports `gate-held` for another element, another non-ambient
-  element fires `play`, or the site pauses it. With R = `duration − currentTime`
-  at that moment, if ε_end < R ≤ cap (cap = min(1 s, 0.15 × duration); a larger
-  R is a mid-clip pause from the site's UI, not an end check), then
-  learned = min(max(learned, R + 2 frames (audio 0.05 s)), cap). The first clip
-  on such a site may be lost this way; the following ones stop in time. The
-  values are in `ms:debug` `endMargin` (docs/contracts.md §5).
 - **Play gate (MAIN agent):** **pre-armed** while the active element plays with
   less than max(1 s, ε_end / rate + 0.3 s) of wall-clock time left
   (`(duration − t) / rate`), so the
@@ -707,7 +708,8 @@ frame, and the site does not move on by itself.
 | Seek click/drag, live readout | command `seekTo` + view transient `drag.target` | pipeline I5; play state untouched |
 | Step ladder (frame → 60 s) | command `step(±1)` + streak memo + fps memo | §6.5 |
 | Play/pause, pause-now | command `togglePlay` | never intent |
-| Speed presets + extra speeds, pitch | `Intent.rate` → reconcile + lock | constants for the lists |
+| Restart `↺` | command `restart` (exact seek to range start + our own play; child command `restart`) | releases the pause hold; no key |
+| Speed presets (+ one chip for an adopted non-preset rate), pitch | `Intent.rate` → reconcile + lock | `PRESETS` |
 | Speed survives new clip / src change / recycled element | reconcile triggers + `defaultPlaybackRate` + lock | the playphrase + YouTube cases |
 | Keys (incl. from a focused iframe) | key map → commands / intent ops | §6.7, §6.12 |
 | Dock, drag | `Intent.placement` | until reload |
@@ -742,7 +744,7 @@ needs to infer the user's wish from media state.
   Trusted Types; container fullscreen; `<video>` fullscreen; modal dialog;
   host removed by the page; viewport resize while floating (clamp `y`).
 - **Activation:** open with no media ("Waiting…", binds later); open while a clip
-  is already playing at 1.25× (locks 1.25, shown in the ▾ button); close releases
+  is already playing at 1.25× (locks 1.25, shown as an extra selected `1.25` chip); close releases
   the lock; reopen after close; reload forgets.
 - **Frames:** cross-origin iframe media; focus inside the iframe (keys
   forwarded); service worker suspended mid-session (ports reconnect); iframe

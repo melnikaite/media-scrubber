@@ -44,6 +44,7 @@
   .b { height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
        border-radius: 6px; color: var(--text); font-weight: 500; font-size: 12.5px; padding: 0 7px; cursor: pointer; }
   .b.dim { color: var(--text2); }
+  .restart { width: 28px; padding: 0; }
   .step { min-width: 62px; }
   .step .n { color: var(--text2); }
   .step.hot .n { color: var(--text); }
@@ -79,18 +80,19 @@
 </head>
 <body>
 <h1>media-scrubber — bar mockup, revision 3</h1>
-<p class="lead">Fewer controls: step ◀ · play · step ▶ · time · speed · (media) · collapse · close. The number on a step
+<p class="lead">Fewer controls: restart ↺ · step ◀ · play · step ▶ · time · speed · (media) · collapse · close. The number on a step
 button is the step its next press makes; it climbs a 1-2-5 ladder while you keep pressing. Keys: Space, ←, →.
 Static design artifact, not extension code.</p>
 
 <template id="row">
   <div class="row">
+    <span class="b restart"><svg viewBox="0 0 16 16"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3.5 2.5v2.7h2.7"/></svg></span>
     <span class="b step back"><span class="tri"><svg viewBox="0 0 10 10"><path d="M8 1v8L1.5 5z"/></svg></span><span class="n">0.1</span></span>
     <span class="b play"><svg viewBox="0 0 16 16"><path d="M5.5 3.5v9l7-4.5z"/></svg></span>
     <span class="b step fwd"><span class="n">0.1</span><span class="tri"><svg viewBox="0 0 10 10"><path d="M2 1v8l6.5-4z"/></svg></span></span>
     <span class="readout"><span class="cur">0:02.4</span> <span class="dur">/ 0:05.0</span></span>
     <span class="spacer"></span>
-    <span class="chip">0.5</span><span class="chip on">0.75</span><span class="chip">1</span><span class="chip">▾</span>
+    <span class="chip">0.5</span><span class="chip on">0.75</span><span class="chip">1</span>
     <span class="b media dim">▣&nbsp;2/3</span>
     <span class="b dim"><svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg></span>
     <span class="b dim"><svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></svg></span>

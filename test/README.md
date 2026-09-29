@@ -82,3 +82,14 @@ end (checked on `timeupdate` and rAF), modelling sites whose own end detection
 fires earlier than our default 0.1 s margin. `reels_adaptive` (1×) and
 `reels_adaptive_slow` (0.5×) assert that after the first pre-empted clip the
 learned margin (`ms:debug` → `endMargin`) makes every following clip stop first.
+
+### Pause recovery (pause hold)
+
+`?pauserecovery=MS` (common.js, used by `single.html` and `reels.html`) models playphrase's
+"pause recovery": the page flags the pauses it makes itself (`__t.sitePause(el)`); any other
+`pause` of a watched element is undone with `el.play()` after MS ms, retried up to 3 times at MS
+intervals while still paused (`__t.recoveries[{name, n, at}]`). `single.html` also has page-level
+`#pplay` / `#ppause` buttons. `pause_hold` checks that our Space / bar pause stays paused ≥ 2 s
+(`counters.holdBlocked`), that the page's own play/pause buttons still work, and reports what
+happens after closing the bar while paused. `reels_pauserecovery` (1×) and
+`reels_pauserecovery_slow` (0.5×) check every clip stays stopped at its end ≥ 1.5 s.

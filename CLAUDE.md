@@ -75,6 +75,12 @@ anything; it names the source of truth and the invariants every change must keep
   pause of the still-playing active element). Never learn from anything after
   our own pause — a site that advances *because* we paused would ratchet the
   margin up forever.
+- **Some players undo any pause they did not make.** playphrase.me ("pause
+  recovery") calls `play()` again ~0.5 s after an external pause, with
+  retries — our bar pause and our stop-at-end pause were both undone. Only a
+  MAIN-world hold on `HTMLMediaElement.prototype.play` for the element we
+  paused works (DESIGN §6.13 pause hold); the site's own buttons pass as a
+  trusted click after the hold started.
 - Content scripts are orphaned when the extension reloads/updates:
   `chrome.runtime.id` becomes undefined. Detect it, tear the bar down, release
   the MAIN-world lock.

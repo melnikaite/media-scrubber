@@ -173,7 +173,7 @@ one level → `null` (label alone).
                                       // this frame's values; effective is null without a local active element
   frames: { connected: true, frames: [3, 4] },   // top: port up + child frame ids heard from
   model: { ... },                     // the last model passed to view.update (§3.1)
-  counters: { reapplies: 0, siteRateWrites: 0, seeksIssued: 0, contested: 0 },
+  counters: { reapplies: 0, siteRateWrites: 0, seeksIssued: 0, contested: 0, holdBlocked: 0 },  // holdBlocked: pause holds that deferred a page play() (DESIGN §6.13)
   ui: null | {                        // view.getDebug(); null when headless
     hostPresent: true, popoverOpen: true, collapsed: false, dimmed: false,
     scrubbing: false, menu: null | 'speed' | 'media', menuItems: [ { text, rect } ], outlineLabel: null | string,

@@ -30,6 +30,9 @@
     gateDisarm: P + 'gate-disarm',
     gateRelease: P + 'gate-release',
     gateHeld: P + 'gate-held',
+    hold: P + 'hold',
+    unhold: P + 'unhold',
+    holdBlocked: P + 'hold-blocked',
     hello: P + 'hello',
     ready: P + 'ready',
     media: P + 'media',
@@ -53,14 +56,14 @@
     passEnded: false,
     lastModel: null,
     heldRef: null,
-    counters: { reapplies: 0, siteRateWrites: 0, seeksIssued: 0, contested: 0 },
+    counters: { reapplies: 0, siteRateWrites: 0, seeksIssued: 0, contested: 0, holdBlocked: 0 },
   };
 
   MS.emit = (name, detail) => {
     window.dispatchEvent(new CustomEvent(name, { detail: detail === undefined ? null : detail }));
   };
-  MS.emitNode = (name, node) => {
-    window.dispatchEvent(new MouseEvent(name, { relatedTarget: node || null }));
+  MS.emitNode = (name, node, detail) => {
+    window.dispatchEvent(new MouseEvent(name, { relatedTarget: node || null, detail: detail || 0 }));
   };
 
   MS.alive = () => {

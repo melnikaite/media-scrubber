@@ -280,7 +280,11 @@
   // `quiet`: we paused this element ourselves (stop at end, or the user's pause) or it is already
   // stopped at its end; nothing that happens to it counts as a pre-emption until it plays again.
   function onPlay(entry) { const el = entry.el(); if (el) memo(el).quiet = false; }
-  function ownPause(el) { memo(el).quiet = true; el.pause(); }
+  // Every pause we make leaves a MAIN-world hold (§6.13 pause hold): a page play() on this
+  // element is deferred until we play it or the user acts on the page's own UI.
+  function ownPause(el) { memo(el).quiet = true; el.pause(); MS.emitNode(MS.EV.hold, el); }
+  // Our own play: drop the hold first (MAIN settles deferred page calls with a native play()).
+  function ownPlay(el) { MS.emitNode(MS.EV.unhold, el); el.play().catch(() => {}); }
   // The site acted on the still-playing active element before our stop: learn how early.
   function preempted(entry, el) {
     if (!el || !MS.state.open || el.ended || MS.state.passRef === entry.ref) return;
@@ -356,6 +360,6 @@
     range, clamp, logical, seekTo, onSeeked, onReset, frameDuration,
     watchFrames, unwatchFrames,
     stepPress, stepRelease, wheelStep, labels, execStep,
-    endCheck, onPausedOrEnded, onPlay, ownPause, preempted, endMarginDebug, reset,
+    endCheck, onPausedOrEnded, onPlay, ownPause, ownPlay, preempted, endMarginDebug, reset,
   };
 })();

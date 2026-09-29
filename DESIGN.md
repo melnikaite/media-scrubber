@@ -59,6 +59,7 @@ docs. These numbers drive §5–§7.
 | Pitch | `preservesPitch === true` by default. |
 | Fullscreen | Site's button fullscreens a **container** div (not the `<video>`). |
 | Keys | Site binds (capture + bubble keydown on the window/document): ArrowUp/ArrowDown and J/K = previous/next slide, **Space = next clip**, ArrowLeft/ArrowRight = previous/next video, **Enter = play/pause**. So Space is *not* play/pause here. |
+| Pause recovery | Any pause it did not initiate is undone after ~0.5 s via `play()` with retries (`__playphrasePauseRecoverySuppressUntil`/`…Attempts`/`__playphrasePlayVerifyTimeoutId` in its bundle): a pause from our bar lasted ~0.5 s, and our stop-at-end pause was undone so the site reached its own end detection. Same "controlled component" pattern as its rate re-assertion. Handled generically by the pause hold (§6.13). |
 | Other | The site has its own speed and repeat buttons; a free-tier dialog appears after 5 clips (irrelevant to us, but it pauses media). |
 
 ### youtube.com/watch
@@ -234,7 +235,11 @@ View transient     drag target, hover, idle, open menu — UI-only, never persis
 
 `togglePlay` (synchronous `el.pause()` when playing — "pause exactly now";
 at a stopped end: release the deferred next clip or replay, §6.13), `seekTo(t)`,
-`step(direction)` (the ladder, §6.5). Commands never touch
+`step(direction)` (the ladder, §6.5). Every pause *we* make (play/pause
+command, `Space`, the end-watch stop) leaves a MAIN-world **pause hold** on
+that element so the pause sticks against page-initiated `play()` (sites that
+"recover" pauses they did not make, §1); our own play drops it (§6.13). The
+hold is element state in MAIN memory, not persisted intent. Commands never touch
 `Intent`; intent ops (`setRate`, `pin`, `collapse`, `dock`, `hide`) never touch
 the element directly — they update `Intent`, and `reconcile`/render follow.
 
@@ -288,6 +293,9 @@ page can save the native ones. Before activation both are inert early-outs.
 | `…:gate-arm` | isolated → main | `relatedTarget` = the active element about to stop / stopped at its end |
 | `…:gate-disarm` | isolated → main | disarm and **forget** a held `play()` (its promise stays pending) so a stale element can never start later |
 | `…:gate-held` / `…:gate-release` | main → isolated / isolated → main | a page `play()` was deferred / run the held `play()` now (§6.13) |
+| `…:hold` | isolated → main | `relatedTarget` = the element we just paused: page `play()` on it is deferred (§6.13 pause hold) |
+| `…:unhold` | isolated → main | `relatedTarget` = element (none = all). `detail` 0: we are about to play it — deferred page calls settle with a native `play()`; `detail` 1 (element removed): they resolve without playing |
+| `…:hold-blocked` | main → isolated | `relatedTarget` = held element; first deferred page `play()` per hold (`counters.holdBlocked`) |
 | `…:hello` / `…:ready` | both | handshake; whichever side loads second re-sends state |
 | `…:media` | main → isolated | `MouseEvent`, `relatedTarget` = media element or (retargeted) outermost shadow host |
 | `…:site-rate` | main → isolated | `detail` = rate the site tried to set (throttled to 1/s) |
@@ -627,6 +635,29 @@ frame, and the site does not move on by itself.
   from 0), and the site advances by its own logic (or the
   clip simply ends). Replay is ← / scrubbing; there is no separate replay path.
 - Our own `play()` calls come from the isolated world and never pass the gate.
+- **Pause hold (MAIN agent).** Some sites treat the element as a controlled
+  component and undo any pause they did not make (playphrase: `play()` again
+  after ~0.5 s, with retries, §1). So every pause we make — `togglePlay`,
+  `Space`, and the end-watch stop — sends `…:hold` for that element; the
+  stopped element therefore stays paused even if the site tries to resume it
+  (the other-element gate above is unchanged). While held, a page call to
+  `play()` on *that* element is deferred: it returns a pending promise and is
+  recorded (all of them — recovery code retries). Exception: site-directed user
+  intent (same rule as the gate: trusted `pointerdown`/`click`/`keydown` not on
+  our host, within 1000 ms) that happened *after* the hold started — the call
+  goes through and the hold is dropped (the user chose to play via the site's
+  own button). Our own play (`togglePlay`/`Space` play, continue at end) sends
+  `…:unhold` first; MAIN resolves the pending promises with the result of a
+  native `play()` (the element is about to play anyway). Seeking and steps do
+  not change play state and do not touch holds. An active-element change
+  keeps the hold on the old paused element (harmless; the old clip cannot
+  resume behind the new one). The element's removal from the registry sends
+  `…:unhold` with `detail` 1 and its pending promises resolve without playing;
+  closing the bar (`…:lock` null) drops all holds the same way — pending
+  promises resolve *without* calling `play()`, returning control to the site
+  (whose recovery may then resume the element: accepted, the bar is closed).
+  We never fight a site's `pause()`. Limit: `relatedTarget` is retargeted to
+  the outermost shadow host, so shadow-DOM media are not held (as for the gate).
 - **Ads are stopped too** (decided 2026-09-29; measured on YouTube, where a 20 s
   pre-roll was held at 19.96 s): an ad and content cannot be told apart
   generically, so the ad→content transition waits for `Space` like any other

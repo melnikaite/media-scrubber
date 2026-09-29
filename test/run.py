@@ -484,7 +484,7 @@ async def _reels_open(env, rate_chip=None, path="/pages/reels.html"):
     return page
 
 
-async def _reels_wait_end_and_continue(env, page, n_clips, per_clip, rate=1.0):
+async def _reels_wait_end_and_continue(env, page, n_clips, per_clip, rate=1.0, hold_ms=750):
     """Stop at end (DESIGN §6.13, UI-DESIGN §2.4; Space = CONTINUE).
 
     Every clip, on both advance paths (`ended`: 5 s, 2 s; the page's own early pause at
@@ -500,15 +500,18 @@ async def _reels_wait_end_and_continue(env, page, n_clips, per_clip, rate=1.0):
         adv0 = await js(page, "() => __t.advances.length")
         dur = await js(page, "() => { window.__endEl = __t.current(); return __endEl.duration; }")
         d = await wait_until(lambda: _at_end(env, page), per_clip(dur), msg=f"atEnd on {clip}")
-        await page.wait_for_timeout(750)
+        rec0 = await js(page, "() => __t.recoveries.length")
+        await page.wait_for_timeout(hold_ms)
         d = await env.debug(page)
         st = await js(page, f"""() => {{ const v = window.__endEl;
             return {{i: __t.index(), ended: __t.ended, adv: __t.advances.slice({adv0}).map(a => a.via),
-                     paused: v.paused, t: v.currentTime, d: v.duration, connected: v.isConnected}}; }}""")
-        rec = {"clip": clip, "left": round(st["d"] - st["t"], 3), "gateHeld": d.get("gateHeld"), "adv": st["adv"]}
+                     paused: v.paused, t: v.currentTime, d: v.duration, connected: v.isConnected,
+                     rec: __t.recoveries.length - {rec0}}}; }}""")
+        rec = {"clip": clip, "left": round(st["d"] - st["t"], 3), "gateHeld": d.get("gateHeld"), "adv": st["adv"],
+               "held_ms": hold_ms, "recoveries": st["rec"], "holdBlocked": d["counters"].get("holdBlocked")}
         out.append(rec)
         check(st["ended"] == ended0, f"{clip}: `ended` fired ({rec})")
-        check(st["adv"] == [] and st["i"] == idx and st["connected"], f"{clip}: page advanced within 750 ms of the stop ({rec})")
+        check(st["adv"] == [] and st["i"] == idx and st["connected"], f"{clip}: page advanced within {hold_ms} ms of the stop ({rec})")
         check(st["paused"], f"{clip}: not paused at end ({rec})")
         check(rec["left"] < 0.2, f"{clip}: stopped {rec['left']} s before the end ({rec})")
         await page.keyboard.press("Space")
@@ -578,6 +581,97 @@ async def t_reels_stop_at_end(env):
     paths = [c["clip"] for c in res if "clip" in c]
     check("clip-3s.webm" in paths, f"early-advance clip not covered: {paths}")
     await page.close()
+
+
+async def t_pause_hold(env):
+    """Pause hold (DESIGN §6.13): our pause sticks against a page that undoes pauses it did not make."""
+    page = await goto(env, "/pages/single.html?pauserecovery=300")
+    await media_ready(page)
+    await env.open(page)
+    await env.active(page, msg="main active")
+    playing = lambda: js(page, "() => !__t.media.main.paused")
+    paused = lambda: js(page, "() => __t.media.main.paused")
+    await click_rect(page, await env.rect(page, "play"))
+    await wait_until(playing, 2, msg="bar play starts")
+    await page.wait_for_timeout(400)
+    out = {}
+    # Space pause holds
+    await page.keyboard.press("Space")
+    await wait_until(paused, 1, msg="Space pauses")
+    t0 = time.monotonic()
+    ok = True
+    while time.monotonic() - t0 < 2.0:
+        ok = ok and await paused()
+        await page.wait_for_timeout(50)
+    d = await env.debug(page)
+    out["space"] = {"held_s": round(time.monotonic() - t0, 2), "stayed": ok, "recoveries": await js(page, "() => __t.recoveries.length"),
+                    "holdBlocked": d["counters"]["holdBlocked"]}
+    check(ok, f"Space pause undone by the page ({out})")
+    check(out["space"]["recoveries"] >= 1, f"page never tried to recover (fixture?) {out}")
+    check(d["counters"]["holdBlocked"] >= 1, f"holdBlocked {d['counters']}")
+    # bar play resumes
+    await click_rect(page, await env.rect(page, "play"))
+    await wait_until(playing, 1, msg="bar play resumes after hold")
+    await page.wait_for_timeout(500)
+    check(await playing(), "bar play did not stick")
+    # bar pause holds
+    r0 = await js(page, "() => __t.recoveries.length")
+    await click_rect(page, await env.rect(page, "play"))
+    await wait_until(paused, 1, msg="bar button pauses")
+    t0 = time.monotonic()
+    ok = True
+    while time.monotonic() - t0 < 2.0:
+        ok = ok and await paused()
+        await page.wait_for_timeout(50)
+    d = await env.debug(page)
+    out["bar"] = {"held_s": round(time.monotonic() - t0, 2), "stayed": ok,
+                  "recoveries": await js(page, "() => __t.recoveries.length") - r0, "holdBlocked": d["counters"]["holdBlocked"]}
+    check(ok, f"bar pause undone by the page ({out})")
+    check(d["counters"]["holdBlocked"] >= 2, f"holdBlocked after bar pause {d['counters']}")
+    # the site's own buttons keep working
+    t0 = time.monotonic()
+    await page.click("#pplay")
+    await wait_until(playing, 0.5, 0.02, msg="site play button resumes immediately")
+    out["site_play_s"] = round(time.monotonic() - t0, 2)
+    await page.wait_for_timeout(500)
+    check(await playing(), "site play did not stick")
+    await page.click("#ppause")
+    await wait_until(paused, 0.5, 0.02, msg="site pause button pauses")
+    await page.wait_for_timeout(1000)
+    check(await paused(), "site pause did not stick")
+    await page.click("#pplay")
+    await wait_until(playing, 0.5, 0.02, msg="site play again")
+    await js(page, "() => document.activeElement.blur()")
+    await page.wait_for_timeout(300)
+    # close while held: report only
+    await page.keyboard.press("Space")
+    await wait_until(paused, 1, msg="Space pauses before close")
+    await page.wait_for_timeout(200)
+    await env.toggle(page)
+    await wait_until(lambda: _closed(env, page), 3, msg="closed")
+    await page.wait_for_timeout(1500)
+    out["after_close_paused"] = await paused()
+    env.note(out)
+    await page.close()
+
+
+async def _reels_pauserecovery(env, rate):
+    page = await _reels_open(env, None if rate == 1.0 else str(rate), path="/pages/reels.html?pauserecovery=300")
+    if rate != 1.0:
+        await env.active(page, lambda a: a["playbackRate"] == rate, 2, msg=f"{rate} on the first reel")
+    res = await _reels_wait_end_and_continue(env, page, 3, lambda dur: dur / rate + 4, rate=rate, hold_ms=1500)
+    env.note(res)
+    check(any(c["recoveries"] > 0 for c in res), f"page never tried to recover at the end (fixture?) {res}")
+    check(res[-1]["holdBlocked"] >= 1, f"holdBlocked {res}")
+    await page.close()
+
+
+async def t_reels_pauserecovery(env):
+    await _reels_pauserecovery(env, 1.0)
+
+
+async def t_reels_pauserecovery_slow(env):
+    await _reels_pauserecovery(env, 0.5)
 
 
 async def t_recycle(env):
@@ -1061,7 +1155,8 @@ async def _readout(env, page, want):
 
 TESTS = [
     ("all_pages", t_all_pages), ("single", t_single), ("ladder_cap", t_ladder_cap), ("reels", t_reels),
-    ("reels_stop_at_end", t_reels_stop_at_end), ("reels_pauseadvance", t_reels_pauseadvance), ("reels_adaptive", t_reels_adaptive), ("reels_adaptive_slow", t_reels_adaptive_slow), ("recycle", t_recycle), ("shadow", t_shadow), ("audio", t_audio),
+    ("reels_stop_at_end", t_reels_stop_at_end), ("reels_pauseadvance", t_reels_pauseadvance), ("reels_adaptive", t_reels_adaptive), ("reels_adaptive_slow", t_reels_adaptive_slow),
+    ("pause_hold", t_pause_hold), ("reels_pauserecovery", t_reels_pauserecovery), ("reels_pauserecovery_slow", t_reels_pauserecovery_slow), ("recycle", t_recycle), ("shadow", t_shadow), ("audio", t_audio),
     ("spa", t_spa), ("fullscreen_container", t_fullscreen_container), ("fullscreen_video", t_fullscreen_video), ("live", t_live), ("hostile", t_hostile), ("ambient", t_ambient),
     ("iframe", t_iframe), ("iframe_extra", t_iframe_extra), ("nomedia", t_nomedia),
 ]

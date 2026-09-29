@@ -28,6 +28,9 @@
   let held = null;             // { el, resolve, reject }
   let lastSiteRateAt = 0;
   let lastIntentAt = -Infinity; // last trusted site-directed pointerdown/click/keydown
+  // Pause hold (DESIGN §6.13): elements WE paused. A page play() on a held element is deferred
+  // unless the user acted on the page after the hold started. el -> { since, blocked, pending[] }
+  const holds = new Map();
 
   // Recent site-directed user intent. Listeners sit on `document` (capture): the isolated world
   // swallows our own keys in the window capture phase, so they never get here; events inside our
@@ -78,8 +81,38 @@
     try { return nativeGetRootNode.call(el) instanceof NativeDocument; } catch (_) { return true; }
   }
 
+  function settleHold(el, h, doPlay) {
+    holds.delete(el);
+    if (!h.pending.length) return;
+    let r;
+    if (doPlay) {
+      try { r = nativePlay.call(el); } catch (err) { r = NativePromise.reject(err); }
+    }
+    for (const p of h.pending) {
+      try {
+        if (r) r.then(p.resolve, p.reject);
+        else p.resolve();   // control goes back to the site: resolved without playing
+      } catch (_) {}
+    }
+  }
+  function dropAllHolds() {
+    for (const [el, h] of [...holds]) { try { settleHold(el, h, false); } catch (_) {} }
+    holds.clear();
+  }
+
   proto.play = function play() {
     try {
+      const h = holds.get(this);
+      if (h) {
+        if (lastIntentAt > h.since && performance.now() - lastIntentAt < INTENT_MS) {
+          // The user chose to play via the site's own UI: the hold is over.
+          settleHold(this, h, false);
+        } else {
+          const el = this;
+          if (!h.blocked) { h.blocked = true; emitNode('hold-blocked', el); }
+          return new NativePromise((resolve, reject) => { h.pending.push({ resolve, reject }); });
+        }
+      }
       if (lockedRate !== null && !isInDocument(this)) emitNode('media', this);
       if (gateArmed && this !== gateStopped && !(performance.now() - lastIntentAt < INTENT_MS)) {
         // Deferred. A previously held call is replaced; its promise stays pending forever
@@ -131,6 +164,7 @@
         lockedRate = v;
       } else {
         lockedRate = null;
+        dropAllHolds();
         release();          // closing the bar lets the site continue its flow
       }
     },
@@ -143,6 +177,20 @@
     // later release cannot start a stale element.
     'gate-disarm'() { gateArmed = false; gateStopped = null; held = null; },
     'gate-release'() { release(); },
+    hold(e) {
+      const el = e.relatedTarget;
+      if (lockedRate === null || !(el instanceof HTMLMediaElement)) return;
+      const h = holds.get(el);
+      if (h) { h.since = performance.now(); h.blocked = false; }
+      else holds.set(el, { since: performance.now(), blocked: false, pending: [] });
+    },
+    // detail 1 = forget (element removed): pending calls resolve without playing.
+    unhold(e) {
+      const el = e.relatedTarget;
+      if (!el) { dropAllHolds(); return; }
+      const h = holds.get(el);
+      if (h) settleHold(el, h, e.detail !== 1);
+    },
     hello() { emit('ready', null); },
   };
   for (const name of Object.keys(handlers)) {

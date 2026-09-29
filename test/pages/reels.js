@@ -38,6 +38,7 @@
     v.dataset.i = String(i);
     t.created++;
     t.track(v, 'reel' + i);
+    t.pauseRecovery(v, 'reel' + i);
     v.addEventListener('loadstart', () => assert1(v));
     v.addEventListener('ratechange', () => setTimeout(() => assert1(v), 10));
     v.addEventListener('timeupdate', () => {
@@ -66,9 +67,9 @@
 
   function earlyCheck(v) {
     if (EARLY_MS > 0 && Number(v.dataset.i) === index && !v.paused && isFinite(v.duration) &&
-        v.duration - v.currentTime < EARLY_MS / 1000) { v.pause(); advance('early-ms'); return; }
+        v.duration - v.currentTime < EARLY_MS / 1000) { t.sitePause(v); advance('early-ms'); return; }
     if (v.dataset.clip !== EARLY || v.paused || !isFinite(v.duration)) return;
-    if (v.currentTime >= v.duration - 0.05) { v.pause(); advance('early'); }   // the queued pause event sees index already moved on
+    if (v.currentTime >= v.duration - 0.05) { t.sitePause(v); advance('early'); }   // the queued pause event sees index already moved on
   }
 
   function show() {
@@ -84,7 +85,7 @@
     const oldSlot = slots[index % 3];
     const old = oldSlot.firstChild;
     t.advances.push({ from: old.dataset.clip, i: index, via, at: performance.now() });
-    old.pause();
+    t.sitePause(old);
     index++;
     const next = slots[index % 3].firstChild;
     show();
@@ -111,7 +112,7 @@
   document.getElementById('next').addEventListener('click', () => advance('button'));
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); advance('key'); }
-    if (e.code === 'Enter') { const v = t.current(); v.paused ? v.play() : v.pause(); }
+    if (e.code === 'Enter') { const v = t.current(); v.paused ? v.play() : t.sitePause(v); }
   });
   if (!new URLSearchParams(location.search).has('noautoplay')) t.start().catch(() => {});
 })();

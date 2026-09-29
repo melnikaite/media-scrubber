@@ -190,6 +190,8 @@
       const intent = MS.intent.get();
       if (intent && intent.pin === e.ref) MS.intent.update({ pin: null });
       if (st.atEndRef === e.ref) st.atEndRef = null;
+      const el = e.local && e.el();
+      if (el) MS.emitNode(MS.EV.unhold, el, 1);   // forget: pending page calls resolve unplayed
     }
     recompute();
     render();
@@ -215,6 +217,7 @@
     st.heldRef = e ? e.ref : null;
     render();
   }
+  function onHoldBlocked() { if (st.open) st.counters.holdBlocked++; }
   function onSiteRate() { if (st.open) st.counters.siteRateWrites++; }
   function onReady() { if (st.open && st.lock !== null) RC.sendLock(st.lock); }
 
@@ -245,13 +248,13 @@
           if (el.ended) el.currentTime = Math.max(0, el.currentTime - 2 * S.frameDuration(el));
           st.passRef = a.ref;
           st.passEnded = false;
-          el.play().catch(() => {});
+          S.ownPlay(el);
         }
       } else if (!el.paused && !el.ended) {
         S.ownPause(el);                        // pause exactly now
       } else {
         disarm();
-        el.play().catch(() => {});
+        S.ownPlay(el);
       }
       render();
     },
@@ -383,6 +386,7 @@
     R.removeDocumentListeners();
     window.removeEventListener(MS.EV.gateHeld, onGateHeld, true);
     window.removeEventListener(MS.EV.siteRate, onSiteRate, true);
+    window.removeEventListener(MS.EV.holdBlocked, onHoldBlocked, true);
     window.removeEventListener(MS.EV.ready, onReady, true);
   }
   MS.orphaned = orphan;
@@ -439,6 +443,7 @@
   R.installDocumentListeners();
   window.addEventListener(MS.EV.gateHeld, onGateHeld, true);
   window.addEventListener(MS.EV.siteRate, onSiteRate, true);
+  window.addEventListener(MS.EV.holdBlocked, onHoldBlocked, true);
   window.addEventListener(MS.EV.ready, onReady, true);
 
   try {

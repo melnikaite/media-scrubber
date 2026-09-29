@@ -48,5 +48,29 @@
 
   // A plain page-world rate write, used by tests for "the site's write sticks".
   t.setRate = (name, r) => { const el = t.media[name]; el.playbackRate = r; return el.playbackRate; };
+  // Opt-in (?pauserecovery=MS), modelled on playphrase's "pause recovery": the page tracks the
+  // pauses it makes itself (t.sitePause); any OTHER pause of a watched element is treated as
+  // accidental and undone with el.play() after MS ms, retried up to 3 times at MS intervals
+  // while the element is still paused. t.recoveries = [{name, n, at}] (one per play() call).
+  const PR = Number(new URLSearchParams(location.search).get('pauserecovery')) || 0;
+  t.recoveries = [];
+  t.sitePause = (el) => { if (!el.paused) { el.__sitePauseAt = performance.now(); el.__sitePauseFlag = true; } el.pause(); };
+  t.pauseRecovery = (el, name) => {
+    if (!PR) return;
+    el.addEventListener('pause', () => {
+      if (el.__sitePauseFlag) { el.__sitePauseFlag = false; return; }
+      if (el.ended || !el.isConnected) return;
+      const since = performance.now();
+      let n = 0;
+      const tick = () => {
+        if (!el.paused || el.ended || !el.isConnected || (el.__sitePauseAt || 0) > since) return;
+        n++;
+        t.recoveries.push({ name, n, at: performance.now() });
+        el.play().catch(() => {});
+        if (n < 3) setTimeout(tick, PR);
+      };
+      setTimeout(tick, PR);
+    });
+  };
   t.MEDIA = new URL('../media/', location.href).href;
 })();
